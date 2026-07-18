@@ -1,9 +1,7 @@
 /** Shared CoinCall backend — host presence + Agora tokens + 1v1 signaling */
-const PRODUCTION_API = 'https://coincall-api.onrender.com/api';
+import { env } from "@/config/env";
 
-export const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL || PRODUCTION_API
-).replace(/\/$/, '');
+export const API_BASE_URL = env.apiBaseUrl;
 
 export type LiveHost = {
   id: string;

@@ -11,20 +11,70 @@ import {
   Phone,
   Radio,
   Sparkles,
+  Swords,
+  Users,
 } from "lucide-react";
 import { GiftSheet } from "@/components/GiftSheet";
+import { LoungeShell } from "@/components/LoungeShell";
 import { VipRibbon } from "@/components/VipRibbon";
+import { WalletDiamond } from "@/components/WalletDiamond";
 import { creators, giftTickerLines, type Creator } from "@/lib/data";
 import { fetchLiveHosts, type LiveHost } from "@/lib/api";
+import {
+  resolveHostActivity,
+  type HostActivityMode,
+} from "@/lib/hostActivity";
 import { useApp } from "@/lib/store";
 
 type FeedItem =
   | { kind: "live"; host: LiveHost }
   | { kind: "demo"; creator: Creator };
 
+function ActivityBadge({
+  mode,
+  label,
+  extra,
+}: {
+  mode: HostActivityMode;
+  label: string;
+  extra?: string;
+}) {
+  if (mode === "party_room") {
+    return (
+      <motion.span
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="inline-flex items-center gap-1.5 rounded-full border border-cyan/50 bg-cyan/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-cyan shadow-[0_0_18px_rgba(0,240,255,0.45)]"
+      >
+        <Users className="h-3 w-3" />
+        {label}
+        {extra ? <span className="text-cyan/70">· {extra}</span> : null}
+      </motion.span>
+    );
+  }
+  if (mode === "pk_battle") {
+    return (
+      <motion.span
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="inline-flex items-center gap-1.5 rounded-full border border-coral/55 bg-coral/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#ff8fb8] shadow-[0_0_18px_rgba(255,42,122,0.45)]"
+      >
+        <Swords className="h-3 w-3" />
+        {label}
+        {extra ? <span className="opacity-80">· {extra}</span> : null}
+      </motion.span>
+    );
+  }
+  return (
+    <span className="live-pulse inline-flex items-center gap-1 rounded-full bg-coral px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+      <Radio className="h-3 w-3" /> {label}
+    </span>
+  );
+}
+
 export function SwipeFeed() {
   const router = useRouter();
-  const { isPremium, spend } = useApp();
+  const { isPremium, spend, openTopUp, coins } = useApp();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [index, setIndex] = useState(0);
   const [giftOpen, setGiftOpen] = useState(false);
@@ -86,10 +136,46 @@ export function SwipeFeed() {
     touchY.current = null;
   };
 
-  const callNow = () => {
-    if (!current) return;
+  const hostId =
+    current?.kind === "live"
+      ? current.host.id
+      : current?.kind === "demo"
+        ? current.creator.id
+        : "";
+  const activity = current
+    ? resolveHostActivity(
+        hostId,
+        current.kind === "live"
+          ? {
+              isLive: current.host.isLive,
+              isOnCall: current.host.isOnCall,
+            }
+          : { isLive: current.creator.live },
+      )
+    : null;
+
+  const rate =
+    current?.kind === "live"
+      ? current.host.ratePerMinute
+      : current?.kind === "demo"
+        ? current.creator.callRate
+        : 80;
+
+  const routeToHost = () => {
+    if (!current || !activity) return;
+    if (coins < rate) {
+      openTopUp(15);
+      return;
+    }
+    // Party Room → join as audience
+    if (activity.mode === "party_room") {
+      const id =
+        current.kind === "live" ? current.host.id : current.creator.id;
+      router.push(`/party/${id}`);
+      return;
+    }
+    // PK Battle or solo → 1v1 (blur optional)
     if (current.kind === "live") {
-      const rate = current.host.ratePerMinute;
       const href = blurOn
         ? `/call/${current.host.id}?live=1&blur=1`
         : `/call/${current.host.id}?live=1`;
@@ -97,7 +183,7 @@ export function SwipeFeed() {
       return;
     }
     const cost = isPremium ? 30 : 60;
-    if (!spend(cost, blurOn ? "Blind match started…" : "Starting call…")) return;
+    if (!spend(cost, blurOn ? "Blind match started…" : "Starting 1v1…")) return;
     router.push(
       blurOn
         ? `/call/${current.creator.id}?blur=1`
@@ -105,11 +191,37 @@ export function SwipeFeed() {
     );
   };
 
-  if (!current) {
+  const callNow = () => {
+    if (!current) return;
+    // Explicit private call always goes 1v1 even if host is in party
+    if (coins < rate) {
+      openTopUp(15);
+      return;
+    }
+    if (current.kind === "live") {
+      router.push(
+        blurOn
+          ? `/call/${current.host.id}?live=1&blur=1`
+          : `/call/${current.host.id}?live=1`,
+      );
+      return;
+    }
+    const cost = isPremium ? 30 : 60;
+    if (!spend(cost, blurOn ? "Blind match…" : "Private call…")) return;
+    router.push(
+      blurOn
+        ? `/call/${current.creator.id}?blur=1`
+        : `/call/${current.creator.id}`,
+    );
+  };
+
+  if (!current || !activity) {
     return (
-      <div className="flex min-h-[70dvh] items-center justify-center px-6 text-center text-sm text-muted">
-        Loading hosts…
-      </div>
+      <LoungeShell minuteRate={80}>
+        <div className="flex min-h-[70dvh] items-center justify-center px-6 text-center text-sm text-cyan/70">
+          Loading elite lounge hosts…
+        </div>
+      </LoungeShell>
     );
   }
 
@@ -120,170 +232,204 @@ export function SwipeFeed() {
       ? current.host.avatarUrl ||
         `https://i.pravatar.cc/800?u=${encodeURIComponent(current.host.id)}`
       : current.creator.image;
-  const rate =
-    current.kind === "live"
-      ? current.host.ratePerMinute
-      : current.creator.callRate;
   const meta =
     current.kind === "live"
-      ? `${current.host.country || "Online"} · ${current.host.isLive ? "LIVE" : "Available"}`
-      : `${current.creator.country} ${current.creator.flag} · Lv ${Math.round(current.creator.rating * 20)}`;
+      ? `${current.host.country || "Lounge"} · ${activity.label}`
+      : `${current.creator.country} ${current.creator.flag} · ${activity.label}`;
   const viewers =
-    current.kind === "demo" ? current.creator.viewers : undefined;
+    activity.viewers ??
+    (current.kind === "demo" ? current.creator.viewers : undefined);
 
   return (
-    <div
-      className="relative h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] overflow-hidden bg-ink"
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-      onWheel={(e) => {
-        if (e.deltaY > 30) next();
-        if (e.deltaY < -30) prev();
-      }}
-    >
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={
-            current.kind === "live"
-              ? current.host.id
-              : current.creator.id
-          }
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -40 }}
-          transition={{ duration: 0.28 }}
-          className="absolute inset-0"
-        >
-          <Image
-            src={image}
-            alt={name}
-            fill
-            priority
-            className={`object-cover transition duration-700 ${
-              blurOn ? "scale-110 blur-2xl brightness-75" : "brightness-90"
-            }`}
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/90" />
-        </motion.div>
-      </AnimatePresence>
+    <LoungeShell minuteRate={rate}>
+      <div
+        className="relative h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] overflow-hidden bg-[#06040b]"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onWheel={(e) => {
+          if (e.deltaY > 30) next();
+          if (e.deltaY < -30) prev();
+        }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={hostId}
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            transition={{ duration: 0.28 }}
+            className="absolute inset-0 cursor-pointer"
+            onClick={routeToHost}
+          >
+            <Image
+              src={image}
+              alt={name}
+              fill
+              priority
+              className={`object-cover transition duration-700 ${
+                blurOn ? "scale-110 blur-2xl brightness-75" : "brightness-90"
+              }`}
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-[#06040b]/95" />
+          </motion.div>
+        </AnimatePresence>
 
-      <div className="relative z-10 flex h-full flex-col px-4 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="flex items-start justify-between gap-3">
-          <VipRibbon />
-          <span className="rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-bold text-sand backdrop-blur">
-            Swipe ↑ next
-          </span>
-        </div>
-
-        <div className="mt-auto flex items-end gap-3">
-          <div className="min-w-0 flex-1 pb-2">
-            <div className="mb-2 flex items-center gap-2">
-              {current.kind === "live" ||
-              (current.kind === "demo" && current.creator.live) ? (
-                <span className="live-pulse inline-flex items-center gap-1 rounded-full bg-coral px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-                  <Radio className="h-3 w-3" /> Live
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-teal/20 px-2 py-0.5 text-[10px] font-bold uppercase text-teal">
-                  Online
-                </span>
-              )}
-              {viewers != null && viewers > 0 && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-white/70">
-                  <Eye className="h-3 w-3" /> {viewers.toLocaleString()}
-                </span>
-              )}
+        <div className="pointer-events-none relative z-10 flex h-full flex-col px-4 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <div className="pointer-events-auto flex items-start justify-between gap-3">
+            <VipRibbon />
+            <div className="flex items-center gap-2">
+              <WalletDiamond compact />
+              <span className="rounded-full border border-cyan/30 bg-black/50 px-2.5 py-1 text-[10px] font-bold text-cyan backdrop-blur">
+                Swipe ↑
+              </span>
             </div>
-            <h1 className="font-display text-3xl font-extrabold text-white">
-              {name}
-            </h1>
-            <p className="mt-1 text-sm text-white/70">{meta}</p>
-            <AnimatePresence mode="wait">
-              <motion.p
-                key={ticker}
-                initial={{ opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -12 }}
-                className="mt-3 truncate text-xs text-gold"
-              >
-                {giftTickerLines[ticker]}
-              </motion.p>
-            </AnimatePresence>
-            {blurOn && (
-              <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-cyan">
-                <Sparkles className="h-3.5 w-3.5" />
-                Blind match · 50% off · blur reveals every 10s
-              </p>
-            )}
           </div>
 
-          <div className="flex flex-col items-center gap-3 pb-1">
-            <div className="relative">
-              <Image
-                src={image}
-                alt=""
-                width={52}
-                height={52}
-                className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-cyan"
-              />
-              <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 animate-pulse rounded-full border-2 border-ink bg-teal" />
+          {/* Floating Party / PK indicator */}
+          <div className="pointer-events-none mt-4 flex justify-center">
+            <ActivityBadge
+              mode={activity.mode}
+              label={activity.label}
+              extra={
+                activity.mode === "party_room"
+                  ? `${activity.seats} seats`
+                  : activity.mode === "pk_battle"
+                    ? activity.pkScore
+                    : undefined
+              }
+            />
+          </div>
+
+          <div className="mt-auto flex items-end gap-3">
+            <div className="pointer-events-auto min-w-0 flex-1 pb-2">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                {viewers != null && viewers > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-cyan/80">
+                    <Eye className="h-3 w-3" /> {viewers.toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={routeToHost}
+                className="text-left"
+              >
+                <h1 className="font-display text-3xl font-extrabold text-white drop-shadow-[0_0_20px_rgba(0,240,255,0.25)]">
+                  {name}
+                </h1>
+                <p className="mt-1 text-sm text-cyan/75">{meta}</p>
+                <p className="mt-2 text-[11px] font-semibold text-sand/80">
+                  {activity.mode === "party_room"
+                    ? "Tap → join as Party audience"
+                    : activity.mode === "pk_battle"
+                      ? "Tap → watch PK / start private 1v1"
+                      : "Tap → instant private 1v1"}
+                </p>
+              </button>
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={ticker}
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  className="mt-3 truncate text-xs font-semibold text-gold"
+                >
+                  {giftTickerLines[ticker]}
+                </motion.p>
+              </AnimatePresence>
+              {blurOn && (
+                <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-cyan">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Blind match · frosted reveal · Instant Clear available
+                </p>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={callNow}
-              className="flex flex-col items-center gap-1"
-            >
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-coral shadow-[0_0_28px_var(--glow)]">
-                <Phone className="h-6 w-6 text-white" />
-              </span>
-              <span className="text-[10px] font-bold text-white">
-                {rate} /min
-              </span>
-            </button>
+            <div className="pointer-events-auto flex flex-col items-center gap-3 pb-1">
+              <div className="relative">
+                <Image
+                  src={image}
+                  alt=""
+                  width={52}
+                  height={52}
+                  className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-cyan shadow-[0_0_16px_rgba(0,240,255,0.45)]"
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 animate-pulse rounded-full border-2 border-ink bg-cyan" />
+              </div>
 
-            <button
-              type="button"
-              onClick={() => setGiftOpen(true)}
-              className="flex flex-col items-center gap-1"
-            >
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 backdrop-blur">
-                <Gift className="h-5 w-5 text-gold" />
-              </span>
-              <span className="text-[10px] font-semibold text-white/80">Gift</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setBlurOn((b) => !b)}
-              className={`flex flex-col items-center gap-1 ${blurOn ? "opacity-100" : "opacity-90"}`}
-            >
-              <span
-                className={`flex h-12 w-12 items-center justify-center rounded-full backdrop-blur ${
-                  blurOn
-                    ? "bg-cyan/30 ring-2 ring-cyan"
-                    : "bg-white/15"
-                }`}
+              <button
+                type="button"
+                onClick={callNow}
+                className="flex flex-col items-center gap-1"
               >
-                <Sparkles className="h-5 w-5 text-cyan" />
-              </span>
-              <span className="text-[10px] font-semibold text-cyan">Blur</span>
-            </button>
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-coral shadow-[0_0_28px_rgba(255,42,122,0.55)]">
+                  <Phone className="h-6 w-6 text-white" />
+                </span>
+                <span className="text-[10px] font-bold text-cyan">
+                  {rate} /min
+                </span>
+              </button>
 
-            <Link
-              href="/premium"
-              className="flex flex-col items-center gap-1"
-            >
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gold/20 text-gold backdrop-blur">
-                ★
-              </span>
-              <span className="text-[10px] font-semibold text-gold">VIP</span>
-            </Link>
+              {activity.mode === "party_room" && (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/party/${hostId}`)}
+                  className="flex flex-col items-center gap-1"
+                >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan/50 bg-cyan/20 shadow-[0_0_16px_rgba(0,240,255,0.4)]">
+                    <Users className="h-5 w-5 text-cyan" />
+                  </span>
+                  <span className="text-[10px] font-semibold text-cyan">
+                    Party
+                  </span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setGiftOpen(true)}
+                className="flex flex-col items-center gap-1"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 backdrop-blur">
+                  <Gift className="h-5 w-5 text-gold" />
+                </span>
+                <span className="text-[10px] font-semibold text-sand/80">
+                  Gift
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBlurOn((b) => !b)}
+                className="flex flex-col items-center gap-1"
+              >
+                <span
+                  className={`flex h-12 w-12 items-center justify-center rounded-full backdrop-blur ${
+                    blurOn
+                      ? "bg-cyan/30 ring-2 ring-cyan"
+                      : "bg-white/10"
+                  }`}
+                >
+                  <Sparkles className="h-5 w-5 text-cyan" />
+                </span>
+                <span className="text-[10px] font-semibold text-cyan">Blur</span>
+              </button>
+
+              <Link
+                href="/premium"
+                className="flex flex-col items-center gap-1"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gold/20 text-gold backdrop-blur">
+                  ★
+                </span>
+                <span className="text-[10px] font-semibold text-gold">VIP</span>
+              </Link>
+            </div>
           </div>
         </div>
+
+        <GiftSheet open={giftOpen} onClose={() => setGiftOpen(false)} />
       </div>
-
-      <GiftSheet open={giftOpen} onClose={() => setGiftOpen(false)} />
-    </div>
+    </LoungeShell>
   );
 }

@@ -1,3 +1,19 @@
+/**
+ * ============================================================================
+ * AGORA WEBRTC — USER APP (PRODUCTION)
+ * ============================================================================
+ * SETUP
+ * 1. https://console.agora.io → Create Project → Enable App Certificate
+ * 2. Client: NEXT_PUBLIC_AGORA_APP_ID in .env.local
+ * 3. Server: AGORA_APP_ID + AGORA_APP_CERTIFICATE on CoinCall API
+ * 4. Tokens: always fetch from GET /api/calls/:id/token?role=user
+ *    Never generate tokens in the browser with the certificate.
+ *
+ * Party Room / PK Battle: reuse startUserAgoraCall with channel =
+ *   party_{roomId} or pk_{battleId} and roles from the same token API.
+ * ============================================================================
+ */
+
 'use client';
 
 type LiveSession = {

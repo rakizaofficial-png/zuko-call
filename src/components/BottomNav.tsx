@@ -19,6 +19,7 @@ export function BottomNav() {
     pathname.startsWith("/live/") ||
     pathname.startsWith("/call/") ||
     pathname.startsWith("/messages/") ||
+    pathname.startsWith("/party/") ||
     pathname === "/premium";
 
   if (hide) return null;

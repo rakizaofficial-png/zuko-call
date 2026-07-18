@@ -15,31 +15,22 @@ import {
   Video,
   VideoOff,
 } from "lucide-react";
+import { FakeLiveVideoPlayer } from "@/components/call/FakeLiveVideoPlayer";
 import { GiftSheet } from "@/components/GiftSheet";
 import { LowBalanceModal } from "@/components/LowBalanceModal";
-import {
-  createCall,
-  endCall as endBridgeCall,
-  fetchCallToken,
-  fetchLiveHosts,
-  waitForAccept,
-  type BridgeCall,
-  type LiveHost,
-} from "@/lib/api";
+import { useCallSessionEngine } from "@/hooks/useCallSessionEngine";
 import {
   setUserCameraOff,
   setUserMuted,
-  startUserAgoraCall,
   stopUserAgoraCall,
 } from "@/lib/agora";
-import { creators } from "@/lib/data";
 import { effectiveRate, sliceCost } from "@/lib/ledger";
 import { useApp } from "@/lib/store";
 
-function creatorsSafe(id: string) {
-  return creators.find((c) => c.id === id) ?? null;
-}
-
+/**
+ * Active call UI — Agora live OR AI prerecorded fallback.
+ * Coin ledger (10s slices) runs for BOTH transports identically.
+ */
 export default function CallSessionClient({
   params,
 }: {
@@ -47,19 +38,37 @@ export default function CallSessionClient({
 }) {
   const { id } = use(params);
   const search = useSearchParams();
-  const isLive = search.get("live") === "1";
+  const preferLiveBridge = search.get("live") === "1";
   const isBlur = search.get("blur") === "1";
-  const { spend, pushToast, isPremium, coins } = useApp();
+  const { spend, pushToast, isPremium, coins, openTopUp } = useApp();
 
-  const demoCreator = !isLive
-    ? creatorsSafe(id)
-    : null;
+  const engine = useCallSessionEngine({
+    hostId: id,
+    enabled: true,
+    preferLiveBridge,
+    onConnected: ({ transport, name }) => {
+      pushToast(
+        transport === "ai_prerecorded"
+          ? `You’re live with ${name}`
+          : `You’re live with ${name}`,
+      );
+    },
+    onFailed: (message) => pushToast(message),
+  });
 
-  const [liveHost, setLiveHost] = useState<LiveHost | null>(null);
-  const [phase, setPhase] = useState<
-    "loading" | "ringing" | "connected" | "demo" | "failed"
-  >(isLive ? "loading" : "demo");
-  const [statusText, setStatusText] = useState("Preparing…");
+  const {
+    state,
+    transport,
+    statusText,
+    aiHost,
+    remoteRef,
+    localRef,
+    disconnect,
+    ratePerMinute,
+    displayName,
+    displayAvatar,
+  } = engine;
+
   const [secs, setSecs] = useState(0);
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
@@ -67,155 +76,52 @@ export default function CallSessionClient({
   const [blurReveal, setBlurReveal] = useState(isBlur ? 0.08 : 1);
   const [lowBalance, setLowBalance] = useState(false);
   const [graceLeft, setGraceLeft] = useState(15);
-  const [bridgeCall, setBridgeCall] = useState<BridgeCall | null>(null);
-  const callIdRef = useRef<string | null>(null);
-  const remoteRef = useRef<HTMLDivElement>(null);
-  const localRef = useRef<HTMLDivElement>(null);
   const graceRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hangUpRef = useRef<() => Promise<void>>(async () => undefined);
 
-  const displayName =
-    liveHost?.name || demoCreator?.name || bridgeCall?.hostName || "Host";
-  const displayImage =
-    liveHost?.avatarUrl ||
-    demoCreator?.image ||
-    `https://i.pravatar.cc/800?u=${encodeURIComponent(id)}`;
-  const baseRate =
-    liveHost?.ratePerMinute ||
-    bridgeCall?.ratePerMinute ||
-    demoCreator?.callRate ||
-    80;
   const rate = isBlur
-    ? Math.round(effectiveRate(baseRate, isPremium) * 0.5)
-    : effectiveRate(baseRate, isPremium);
+    ? Math.round(effectiveRate(ratePerMinute, isPremium) * 0.5)
+    : effectiveRate(ratePerMinute, isPremium);
 
+  const isRinging = state === "RINGING" || state === "ROUTING";
+  const isConnected = state === "CONNECTED";
+  const isFailed = state === "FAILED";
+  const isAi = transport === "ai_prerecorded";
+
+  const hangUp = async () => {
+    await disconnect();
+    await stopUserAgoraCall();
+    pushToast("Call ended");
+  };
+  hangUpRef.current = hangUp;
+
+  // Dynamic 10-second coin deduction — identical for Agora + AI fallback
   useEffect(() => {
-    if (!isLive) {
-      setPhase("demo");
-      setStatusText("Demo mode — not connected to CoinCall host");
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        setStatusText("Finding host on CoinCall…");
-        const hosts = await fetchLiveHosts();
-        const host = hosts.find((h) => h.id === id);
-        if (!host) {
-          setPhase("failed");
-          setStatusText("Host went offline. Ask them to Go Online.");
-          return;
-        }
-        if (cancelled) return;
-        setLiveHost(host);
-
-        setPhase("ringing");
-        setStatusText(`Ringing ${host.name} on CoinCall…`);
-
-        const userId = `luma_${Math.random().toString(36).slice(2, 9)}`;
-        const call = await createCall({
-          hostId: host.id,
-          userId,
-          userName: "Luma Fan",
-        });
-        if (cancelled) return;
-        callIdRef.current = call.id;
-        setBridgeCall(call);
-
-        const accepted = await waitForAccept(call.id, (st) => {
-          if (st === "ringing") setStatusText(`Waiting for ${host.name}…`);
-        });
-        if (cancelled) return;
-        setBridgeCall(accepted);
-
-        setStatusText("Host accepted · joining video…");
-        const token = await fetchCallToken(accepted.id);
-        if (cancelled) return;
-
-        // Wait until video surfaces are in the DOM and painted
-        for (let i = 0; i < 40; i++) {
-          if (localRef.current && remoteRef.current) break;
-          await new Promise((r) => requestAnimationFrame(() => r(null)));
-        }
-        if (!localRef.current || !remoteRef.current) {
-          throw new Error("Video surface missing — reload and allow camera");
-        }
-
-        // Show surfaces before joining so Agora has sized containers
-        setPhase("connected");
-        setStatusText("Starting camera…");
-        await new Promise((r) => setTimeout(r, 120));
-
-        await startUserAgoraCall({
-          appId: token.appId,
-          channel: token.channel,
-          token: token.token,
-          uid: token.uid,
-          localVideoEl: localRef.current,
-          remoteVideoEl: remoteRef.current,
-        });
-
-        if (cancelled) return;
-        setStatusText(`Connected with ${host.name}`);
-        pushToast(`You’re live with ${host.name}`);
-      } catch (e: unknown) {
-        if (cancelled) return;
-        const message = e instanceof Error ? e.message : "Could not connect";
-        setPhase("failed");
-        setStatusText(message);
-        pushToast(message);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      void stopUserAgoraCall();
-      if (callIdRef.current) {
-        void endBridgeCall(callIdRef.current);
-        callIdRef.current = null;
-      }
-    };
-  }, [id, isLive, pushToast]);
-
-  useEffect(() => {
-    if (isLive || phase !== "demo") return;
-    const t = setTimeout(() => {
-      setStatusText(`Demo with ${displayName}`);
-      pushToast("Demo call — use live hosts for real CoinCall connect");
-    }, 800);
-    return () => clearTimeout(t);
-  }, [displayName, isLive, phase, pushToast]);
-
-  useEffect(() => {
-    const billing =
-      phase === "connected" || (!isLive && phase === "demo");
-    if (!billing) return;
+    if (!isConnected) return;
 
     const tick = setInterval(() => {
       setSecs((s) => {
         const next = s + 1;
 
-        // Blueprint: reveal blur a bit every 10 seconds
         if (isBlur && next % 10 === 0) {
           setBlurReveal((b) => Math.min(1, b + 0.12));
         }
 
-        // Blueprint: deduct Rm/6 every 10 seconds
         if (next > 0 && next % 10 === 0) {
           const cost = sliceCost(rate);
           const ok = spend(cost, `−${cost} coins · 10s`);
           if (!ok) {
             setLowBalance(true);
             setGraceLeft(15);
+            openTopUp(15);
             if (!graceRef.current) {
               graceRef.current = setInterval(() => {
                 setGraceLeft((g) => {
                   if (g <= 1) {
                     if (graceRef.current) clearInterval(graceRef.current);
                     graceRef.current = null;
-                    void hangUp();
-                    pushToast("Call ended — low balance");
+                    void hangUpRef.current();
+                    pushToast("Call ended — top up to continue");
                     return 0;
                   }
                   return g - 1;
@@ -241,21 +147,10 @@ export default function CallSessionClient({
         graceRef.current = null;
       }
     };
-    // hangUp intentionally omitted — stable enough via refs
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBlur, isLive, isPremium, phase, rate, spend, pushToast, lowBalance]);
+  }, [isBlur, isConnected, rate, spend, pushToast, lowBalance, openTopUp]);
 
   const mm = String(Math.floor(secs / 60)).padStart(2, "0");
   const ss = String(secs % 60).padStart(2, "0");
-
-  const hangUp = async () => {
-    await stopUserAgoraCall();
-    if (callIdRef.current) {
-      await endBridgeCall(callIdRef.current);
-      callIdRef.current = null;
-    }
-    pushToast("Call ended");
-  };
 
   const clearBlur = () => {
     if (!isBlur || blurReveal >= 1) return;
@@ -265,22 +160,35 @@ export default function CallSessionClient({
   };
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-ink">
-      {phase !== "connected" && phase !== "ringing" && (
+    <main className="relative min-h-dvh overflow-hidden bg-[#06040b]">
+      {/* AI fake-live full-screen player (no chrome) */}
+      {isAi && aiHost && (
+        <FakeLiveVideoPlayer
+          aiHost={aiHost}
+          active={isConnected}
+          muted={false}
+        />
+      )}
+
+      {/* Avatar backdrop while routing / ringing / failed */}
+      {!isConnected && (
         <Image
-          src={displayImage}
+          src={displayAvatar}
           alt={displayName}
           fill
           priority
-          className={`object-cover transition ${camOff ? "blur-xl brightness-50" : "brightness-75"}`}
+          className={`object-cover transition ${
+            camOff ? "blur-xl brightness-50" : "brightness-75"
+          }`}
         />
       )}
-      {(phase === "ringing" || phase === "loading") && (
-        <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center bg-gradient-to-b from-ink via-ink-2 to-coral/30">
+
+      {isRinging && (
+        <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center bg-gradient-to-b from-[#06040b] via-ink-2 to-coral/30">
           <div className="relative mb-6">
             <span className="absolute inset-0 animate-ping rounded-full bg-coral/40" />
             <Image
-              src={displayImage}
+              src={displayAvatar}
               alt=""
               width={120}
               height={120}
@@ -288,19 +196,23 @@ export default function CallSessionClient({
             />
           </div>
           <p className="font-display text-2xl font-extrabold">{displayName}</p>
-          <p className="mt-2 text-sm text-gold">
-            {phase === "ringing" ? "Ringing host…" : "Connecting…"}
+          <p className="mt-2 animate-pulse text-sm font-semibold text-cyan">
+            Connecting to Host…
           </p>
+          <p className="mt-1 text-xs text-gold/80">{statusText}</p>
         </div>
       )}
+
+      {/* Agora remote surface — only for live transport */}
       <div
         ref={remoteRef}
         id="agora-remote"
         className={`absolute inset-0 bg-black ${
-          phase === "connected" ? "z-[1] opacity-100" : "z-0 opacity-0"
+          isConnected && !isAi ? "z-[1] opacity-100" : "z-0 opacity-0"
         }`}
       />
-      {isBlur && blurReveal < 1 && (
+
+      {isBlur && blurReveal < 1 && isConnected && (
         <div
           className="pointer-events-none absolute inset-0 z-[2] backdrop-blur-2xl transition-all duration-700"
           style={{
@@ -322,8 +234,13 @@ export default function CallSessionClient({
           id="agora-local"
           className="h-full w-full bg-gradient-to-br from-ink-3 to-coral/30"
         />
-        {phase !== "connected" && (
+        {!isConnected && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted">
+            You
+          </div>
+        )}
+        {isConnected && isAi && (
+          <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/50 to-transparent pb-2 text-[10px] font-bold text-white/80">
             You
           </div>
         )}
@@ -340,13 +257,15 @@ export default function CallSessionClient({
           </Link>
           <div className="rounded-full bg-black/45 px-3 py-1.5 text-center backdrop-blur">
             <p className="text-xs font-bold">
-              {phase === "ringing"
-                ? "Ringing host…"
-                : phase === "connected"
-                  ? "Private 1v1 · CoinCall"
-                  : phase === "failed"
+              {isRinging
+                ? "Connecting…"
+                : isConnected
+                  ? isAi
+                    ? "Private 1v1"
+                    : "Private 1v1 · Live"
+                  : isFailed
                     ? "Failed"
-                    : "Demo 1v1"}
+                    : "1v1"}
             </p>
             <p className="font-mono text-sm tabular-nums text-gold">
               {mm}:{ss}
@@ -369,7 +288,7 @@ export default function CallSessionClient({
             {coins} coins left
           </p>
           <p className="mt-3 text-sm text-white/80">{statusText}</p>
-          {isBlur && blurReveal < 1 && (
+          {isBlur && blurReveal < 1 && isConnected && (
             <button
               type="button"
               onClick={clearBlur}
@@ -387,7 +306,7 @@ export default function CallSessionClient({
               onClick={() => {
                 setMuted((m) => {
                   const next = !m;
-                  void setUserMuted(next);
+                  if (!isAi) void setUserMuted(next);
                   return next;
                 });
               }}
@@ -400,7 +319,7 @@ export default function CallSessionClient({
               onClick={() => {
                 setCamOff((c) => {
                   const next = !c;
-                  void setUserCameraOff(next);
+                  if (!isAi) void setUserCameraOff(next);
                   return next;
                 });
               }}
@@ -427,9 +346,9 @@ export default function CallSessionClient({
             </Link>
           </div>
           <p className="text-center text-xs text-white/50">
-            {isLive
-              ? "Host must accept in CoinCall app to connect"
-              : "Open CoinCall host → Online → call from Live list"}
+            {isConnected
+              ? "Secure private session"
+              : "Establishing encrypted media path…"}
           </p>
         </div>
       </div>
@@ -439,6 +358,7 @@ export default function CallSessionClient({
         open={lowBalance}
         graceLeft={graceLeft}
         onDismiss={() => setLowBalance(false)}
+        minuteRate={rate}
       />
     </main>
   );

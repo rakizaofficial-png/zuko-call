@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Coins, Crown } from "lucide-react";
+import { Crown } from "lucide-react";
+import { WalletDiamond } from "@/components/WalletDiamond";
 import { useApp } from "@/lib/store";
+import { vipLabel } from "@/lib/ledger";
 
 export function TopBar({
   title,
@@ -11,40 +13,34 @@ export function TopBar({
   title: string;
   subtitle?: string;
 }) {
-  const { coins, isPremium } = useApp();
+  const { isPremium, vipTier } = useApp();
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-3 bg-ink/80 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
+    <header className="sticky top-0 z-30 flex items-center justify-between gap-3 bg-[#06040b]/85 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
       <div className="min-w-0">
-        <p className="font-display text-[11px] font-semibold uppercase tracking-[0.22em] text-coral">
-          Luma
+        <p className="font-display text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan">
+          Luma Lounge
         </p>
         <h1 className="font-display truncate text-xl font-bold leading-tight text-sand">
           {title}
         </h1>
         {subtitle && (
-          <p className="truncate text-xs text-muted">{subtitle}</p>
+          <p className="truncate text-xs text-cyan/70">{subtitle}</p>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {isPremium && (
+        {(isPremium || vipTier !== "none") && (
           <Link
             href="/premium"
-            className="flex h-9 items-center gap-1 rounded-full bg-gold/15 px-2.5 text-gold"
+            className="flex h-9 items-center gap-1 rounded-full border border-cyan/35 bg-cyan/10 px-2.5 text-cyan shadow-[0_0_14px_rgba(0,240,255,0.25)]"
           >
             <Crown className="h-3.5 w-3.5" />
-            <span className="text-[10px] font-bold">VIP</span>
+            <span className="text-[10px] font-bold">
+              {vipTier === "none" ? "VIP" : vipLabel(vipTier).split(" ")[0]}
+            </span>
           </Link>
         )}
-        <Link
-          href="/wallet"
-          className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-ink-3 px-3 shadow-[0_0_20px_var(--glow)]"
-        >
-          <Coins className="h-4 w-4 text-gold" />
-          <span className="text-sm font-bold tabular-nums text-sand">
-            {coins.toLocaleString()}
-          </span>
-        </Link>
+        <WalletDiamond />
       </div>
     </header>
   );
