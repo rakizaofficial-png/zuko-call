@@ -200,12 +200,20 @@ export const threads: ChatThread[] = [
 ];
 
 export const gifts: Gift[] = [
-  { id: "g1", name: "Rose", emoji: "🌹", coins: 10 },
+  { id: "g1", name: "Rose", emoji: "🌹", coins: 5 },
   { id: "g2", name: "Kiss", emoji: "💋", coins: 50 },
   { id: "g3", name: "Star", emoji: "⭐", coins: 120 },
-  { id: "g4", name: "Rocket", emoji: "🚀", coins: 500 },
-  { id: "g5", name: "Crown", emoji: "👑", coins: 1200 },
+  { id: "g4", name: "Royal Crown", emoji: "👑", coins: 500 },
+  { id: "g5", name: "Magic Castle", emoji: "🏰", coins: 1200 },
   { id: "g6", name: "Diamond", emoji: "💎", coins: 3000 },
+];
+
+export const giftTickerLines = [
+  "User492 just gifted a Magic Castle to Aisha!",
+  "VIP_Kai sent a Royal Crown 👑",
+  "Mira received 12 Roses in 30 seconds",
+  "Sofia unlocked a Diamond gift 💎",
+  "Blind Match revealed — call went crystal clear",
 ];
 
 export const coinPacks: CoinPack[] = [

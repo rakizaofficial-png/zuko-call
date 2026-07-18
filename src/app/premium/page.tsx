@@ -55,8 +55,8 @@ const perks = [
   },
   {
     icon: Sparkles,
-    title: "Daily coin boost",
-    desc: "Check-in rewards double for VIP members",
+    title: "VIP Flex XP · Silver → Gold → Diamond",
+    desc: "Spend coins to climb tiers, unlock borders & entrance FX",
   },
   {
     icon: BadgeCheck,
@@ -70,13 +70,13 @@ const perks = [
   },
   {
     icon: Shield,
-    title: "Ad-free experience",
-    desc: "Cleaner feed, faster joins, no interruptions",
+    title: "Blind Match discount",
+    desc: "Blur-reveal calls at 50% off the per-minute rate",
   },
 ];
 
 export default function PremiumPage() {
-  const { isPremium, setPremium, addCoins, pushToast } = useApp();
+  const { isPremium, setPremium, addCoins, pushToast, xp, vipTier } = useApp();
 
   const subscribe = (planId: string) => {
     const plan = plans.find((p) => p.id === planId)!;
@@ -125,8 +125,8 @@ export default function PremiumPage() {
             Gift bigger.
           </h2>
           <p className="relative mt-2 max-w-[17rem] text-sm text-muted">
-            VIP is built for fans — cheaper matches, call discounts, and daily
-            coin boosts via Play Store billing.
+            VIP is built for fans — cheaper matches, call discounts, and XP tiers
+            (Silver · Gold · Diamond). Your XP: {xp} · {vipTier}
           </p>
         </motion.div>
       </section>

@@ -54,6 +54,21 @@ export default function CallLobbyPage() {
     router.push(`/call/${pick.id}`);
   };
 
+  const blindMatch = () => {
+    if (liveHosts.length) {
+      const pick = liveHosts[Math.floor(Math.random() * liveHosts.length)];
+      const cost = isPremium ? 15 : 30;
+      if (!spend(cost, "Blind match · blur reveal…")) return;
+      router.push(`/call/${pick.id}?live=1&blur=1`);
+      return;
+    }
+    const cost = isPremium ? 15 : 30;
+    if (!spend(cost, "Blind demo match…")) return;
+    const pick = onlineDemo[Math.floor(Math.random() * onlineDemo.length)];
+    pushToast("Blind match demo — Instant Clear unlocks video");
+    router.push(`/call/${pick.id}?blur=1`);
+  };
+
   return (
     <main>
       <TopBar
@@ -108,6 +123,13 @@ export default function CallLobbyPage() {
               {liveHosts.length
                 ? `Match live host · ${isPremium ? 30 : 60} coins`
                 : `Demo match · ${isPremium ? 30 : 60} coins`}
+            </button>
+            <button
+              type="button"
+              onClick={blindMatch}
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full border border-cyan/40 bg-cyan/10 py-3 text-sm font-bold text-cyan"
+            >
+              Blind Match · 50% off + blur reveal
             </button>
           </div>
         </motion.div>

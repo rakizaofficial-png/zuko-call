@@ -16,6 +16,7 @@ import {
   VideoOff,
 } from "lucide-react";
 import { GiftSheet } from "@/components/GiftSheet";
+import { LowBalanceModal } from "@/components/LowBalanceModal";
 import {
   createCall,
   endCall as endBridgeCall,
@@ -32,6 +33,7 @@ import {
   stopUserAgoraCall,
 } from "@/lib/agora";
 import { creators } from "@/lib/data";
+import { effectiveRate, sliceCost } from "@/lib/ledger";
 import { useApp } from "@/lib/store";
 
 function creatorsSafe(id: string) {
@@ -46,6 +48,7 @@ export default function CallSessionClient({
   const { id } = use(params);
   const search = useSearchParams();
   const isLive = search.get("live") === "1";
+  const isBlur = search.get("blur") === "1";
   const { spend, pushToast, isPremium, coins } = useApp();
 
   const demoCreator = !isLive
@@ -61,10 +64,14 @@ export default function CallSessionClient({
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
+  const [blurReveal, setBlurReveal] = useState(isBlur ? 0.08 : 1);
+  const [lowBalance, setLowBalance] = useState(false);
+  const [graceLeft, setGraceLeft] = useState(15);
   const [bridgeCall, setBridgeCall] = useState<BridgeCall | null>(null);
   const callIdRef = useRef<string | null>(null);
   const remoteRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLDivElement>(null);
+  const graceRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const displayName =
     liveHost?.name || demoCreator?.name || bridgeCall?.hostName || "Host";
@@ -72,11 +79,14 @@ export default function CallSessionClient({
     liveHost?.avatarUrl ||
     demoCreator?.image ||
     `https://i.pravatar.cc/800?u=${encodeURIComponent(id)}`;
-  const rate =
+  const baseRate =
     liveHost?.ratePerMinute ||
     bridgeCall?.ratePerMinute ||
     demoCreator?.callRate ||
     80;
+  const rate = isBlur
+    ? Math.round(effectiveRate(baseRate, isPremium) * 0.5)
+    : effectiveRate(baseRate, isPremium);
 
   useEffect(() => {
     if (!isLive) {
@@ -181,18 +191,59 @@ export default function CallSessionClient({
     const billing =
       phase === "connected" || (!isLive && phase === "demo");
     if (!billing) return;
+
     const tick = setInterval(() => {
       setSecs((s) => {
         const next = s + 1;
-        if (next > 0 && next % 60 === 0) {
-          const bill = isPremium ? Math.round(rate * 0.85) : rate;
-          spend(bill, `−${bill} coins · minute ${next / 60}`);
+
+        // Blueprint: reveal blur a bit every 10 seconds
+        if (isBlur && next % 10 === 0) {
+          setBlurReveal((b) => Math.min(1, b + 0.12));
+        }
+
+        // Blueprint: deduct Rm/6 every 10 seconds
+        if (next > 0 && next % 10 === 0) {
+          const cost = sliceCost(rate);
+          const ok = spend(cost, `−${cost} coins · 10s`);
+          if (!ok) {
+            setLowBalance(true);
+            setGraceLeft(15);
+            if (!graceRef.current) {
+              graceRef.current = setInterval(() => {
+                setGraceLeft((g) => {
+                  if (g <= 1) {
+                    if (graceRef.current) clearInterval(graceRef.current);
+                    graceRef.current = null;
+                    void hangUp();
+                    pushToast("Call ended — low balance");
+                    return 0;
+                  }
+                  return g - 1;
+                });
+              }, 1000);
+            }
+          } else if (ok && lowBalance) {
+            setLowBalance(false);
+            if (graceRef.current) {
+              clearInterval(graceRef.current);
+              graceRef.current = null;
+            }
+          }
         }
         return next;
       });
     }, 1000);
-    return () => clearInterval(tick);
-  }, [isLive, isPremium, phase, rate, spend]);
+
+    return () => {
+      clearInterval(tick);
+      if (graceRef.current) {
+        clearInterval(graceRef.current);
+        graceRef.current = null;
+      }
+    };
+    // hangUp intentionally omitted — stable enough via refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBlur, isLive, isPremium, phase, rate, spend, pushToast, lowBalance]);
 
   const mm = String(Math.floor(secs / 60)).padStart(2, "0");
   const ss = String(secs % 60).padStart(2, "0");
@@ -204,6 +255,13 @@ export default function CallSessionClient({
       callIdRef.current = null;
     }
     pushToast("Call ended");
+  };
+
+  const clearBlur = () => {
+    if (!isBlur || blurReveal >= 1) return;
+    const bonus = Math.max(20, Math.round(rate * 0.4));
+    if (!spend(bonus, `Instant Clear · −${bonus} coins`)) return;
+    setBlurReveal(1);
   };
 
   return (
@@ -242,6 +300,16 @@ export default function CallSessionClient({
           phase === "connected" ? "z-[1] opacity-100" : "z-0 opacity-0"
         }`}
       />
+      {isBlur && blurReveal < 1 && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[2] backdrop-blur-2xl transition-all duration-700"
+          style={{
+            opacity: 1 - blurReveal,
+            WebkitBackdropFilter: `blur(${Math.round((1 - blurReveal) * 28)}px)`,
+            backdropFilter: `blur(${Math.round((1 - blurReveal) * 28)}px)`,
+          }}
+        />
+      )}
       <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/55 via-transparent to-black/85" />
 
       <motion.div
@@ -297,9 +365,19 @@ export default function CallSessionClient({
           <h1 className="font-display text-3xl font-extrabold">{displayName}</h1>
           <p className="mt-1 text-sm text-white/70">
             {rate} coins/min
-            {isPremium ? " · VIP −15%" : ""} · {coins} coins left
+            {isBlur ? " · Blind 50% off" : isPremium ? " · VIP −15%" : ""} ·{" "}
+            {coins} coins left
           </p>
           <p className="mt-3 text-sm text-white/80">{statusText}</p>
+          {isBlur && blurReveal < 1 && (
+            <button
+              type="button"
+              onClick={clearBlur}
+              className="relative z-30 mt-4 rounded-full border border-cyan/40 bg-cyan/20 px-4 py-2 text-xs font-bold text-cyan backdrop-blur"
+            >
+              Instant Clear · reveal now
+            </button>
+          )}
         </div>
 
         <div className="mt-auto flex flex-col items-center gap-5">
@@ -357,6 +435,11 @@ export default function CallSessionClient({
       </div>
 
       <GiftSheet open={giftOpen} onClose={() => setGiftOpen(false)} />
+      <LowBalanceModal
+        open={lowBalance}
+        graceLeft={graceLeft}
+        onDismiss={() => setLowBalance(false)}
+      />
     </main>
   );
 }

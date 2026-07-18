@@ -8,16 +8,20 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { vipTierFromXp, type VipTier } from "@/lib/ledger";
 
 type Toast = { id: number; text: string };
 
 type AppStore = {
   coins: number;
+  xp: number;
+  vipTier: VipTier;
   isPremium: boolean;
   following: string[];
   toasts: Toast[];
   spend: (amount: number, label?: string) => boolean;
   addCoins: (amount: number, label?: string) => void;
+  addXp: (amount: number) => void;
   toggleFollow: (id: string) => void;
   setPremium: (v: boolean) => void;
   pushToast: (text: string) => void;
@@ -27,9 +31,12 @@ const Ctx = createContext<AppStore | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [coins, setCoins] = useState(320);
+  const [xp, setXp] = useState(120);
   const [isPremium, setPremium] = useState(false);
   const [following, setFollowing] = useState<string[]>(["c1", "c2"]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const vipTier = useMemo(() => vipTierFromXp(xp), [xp]);
 
   const pushToast = useCallback((text: string) => {
     const id = Date.now();
@@ -39,6 +46,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, 2400);
   }, []);
 
+  const addXp = useCallback((amount: number) => {
+    setXp((x) => x + amount);
+  }, []);
+
   const spend = useCallback(
     (amount: number, label?: string) => {
       if (coins < amount) {
@@ -46,6 +57,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return false;
       }
       setCoins((c) => c - amount);
+      setXp((x) => x + amount);
       if (label) pushToast(label);
       return true;
     },
@@ -69,16 +81,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       coins,
+      xp,
+      vipTier,
       isPremium,
       following,
       toasts,
       spend,
       addCoins,
+      addXp,
       toggleFollow,
       setPremium,
       pushToast,
     }),
-    [coins, isPremium, following, toasts, spend, addCoins, toggleFollow, pushToast],
+    [
+      coins,
+      xp,
+      vipTier,
+      isPremium,
+      following,
+      toasts,
+      spend,
+      addCoins,
+      addXp,
+      toggleFollow,
+      pushToast,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

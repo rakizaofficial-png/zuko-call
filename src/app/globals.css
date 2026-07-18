@@ -1,17 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --ink: #0c0a09;
-  --ink-2: #161210;
-  --ink-3: #221c18;
+  --ink: #06040b;
+  --ink-2: #100c16;
+  --ink-3: #1a1424;
   --sand: #f6efe6;
   --muted: #a89a8c;
-  --coral: #ff5a3c;
-  --coral-2: #ff7a4d;
-  --gold: #f5c542;
-  --teal: #2dd4bf;
+  --coral: #ff2a7a;
+  --coral-2: #ff5a9a;
+  --gold: #ffb800;
+  --teal: #00f0ff;
+  --cyan: #00f0ff;
   --line: rgba(246, 239, 230, 0.08);
-  --glow: rgba(255, 90, 60, 0.35);
+  --glow: rgba(255, 42, 122, 0.4);
   --background: var(--ink);
   --foreground: var(--sand);
 }
@@ -28,6 +29,7 @@
   --color-coral-2: var(--coral-2);
   --color-gold: var(--gold);
   --color-teal: var(--teal);
+  --color-cyan: var(--cyan);
   --color-line: var(--line);
   --font-display: var(--font-syne);
   --font-sans: var(--font-manrope);
@@ -55,10 +57,14 @@ body {
 
 .app-atmosphere {
   background:
-    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(255, 90, 60, 0.22), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(245, 197, 66, 0.12), transparent 50%),
-    radial-gradient(ellipse 50% 40% at 50% 100%, rgba(45, 212, 191, 0.08), transparent 55%),
-    linear-gradient(180deg, #120e0c 0%, #0c0a09 40%, #0a0908 100%);
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(255, 42, 122, 0.22), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(0, 240, 255, 0.1), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 50% 100%, rgba(255, 184, 0, 0.08), transparent 55%),
+    linear-gradient(180deg, #0e0a14 0%, #06040b 40%, #050308 100%);
+}
+
+.vip-ribbon {
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.25);
 }
 
 .app-grain::before {
