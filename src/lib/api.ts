@@ -16,6 +16,8 @@ export type LiveHost = {
   isOnline: boolean;
   isLive: boolean;
   isOnCall: boolean;
+  readyToCall?: boolean;
+  workspaceMode?: "waiting_1v1" | "solo_calling";
 };
 
 export type BridgeCall = {
@@ -38,8 +40,13 @@ async function parse<T>(res: Response): Promise<T> {
   return data as T;
 }
 
-export async function fetchLiveHosts(): Promise<LiveHost[]> {
-  const res = await fetch(`${requireApiBase()}/hosts`, { cache: "no-store" });
+export async function fetchLiveHosts(opts?: {
+  readyOnly?: boolean;
+}): Promise<LiveHost[]> {
+  const readyQs = opts?.readyOnly ? "?ready=1" : "";
+  const res = await fetch(`${requireApiBase()}/hosts${readyQs}`, {
+    cache: "no-store",
+  });
   const data = await parse<{ hosts: LiveHost[] }>(res);
   return data.hosts ?? [];
 }
