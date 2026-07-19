@@ -18,6 +18,7 @@ export function BottomNav() {
   const hide =
     pathname.startsWith("/live/") ||
     pathname.startsWith("/call/") ||
+    pathname.startsWith("/host/") ||
     pathname === "/match" ||
     pathname.startsWith("/messages/") ||
     pathname.startsWith("/party/") ||

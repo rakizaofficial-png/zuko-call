@@ -22,6 +22,9 @@ export type DiscoverHost = {
   nearby: boolean;
   recentlyActive: boolean;
   source: "live" | "catalog";
+  /** Display gender for profile cards */
+  gender: "female" | "male";
+  age?: number;
 };
 
 const LANG_BY_COUNTRY: Record<string, string> = {
@@ -66,6 +69,8 @@ function enrichCreator(c: Creator): DiscoverHost {
     nearby: h % 3 === 0,
     recentlyActive: c.online || c.live,
     source: "catalog",
+    gender: "female",
+    age: c.age,
   };
 }
 
@@ -108,6 +113,8 @@ function enrichLive(h: LiveHost, i: number): DiscoverHost {
     nearby: seed % 3 === 0,
     recentlyActive: h.isOnline || h.isLive || h.isOnCall,
     source: "live",
+    gender: "female",
+    age: 20 + (seed % 8),
   };
 }
 
@@ -165,4 +172,42 @@ export function sectionHosts(hosts: DiscoverHost[]) {
   const nearby = hosts.filter((h) => h.nearby).slice(0, 10);
   const recent = hosts.filter((h) => h.recentlyActive).slice(0, 10);
   return { online, trending, newest, topRated, recommended, nearby, recent };
+}
+
+export function findDiscoverHost(
+  hosts: DiscoverHost[],
+  id: string,
+): DiscoverHost | undefined {
+  return hosts.find((h) => h.id === id);
+}
+
+export function hostFromId(id: string, live: LiveHost[] = []): DiscoverHost {
+  const merged = mergeDiscoverHosts(live);
+  const hit = merged.find((h) => h.id === id);
+  if (hit) return hit;
+  const seed = hash(id);
+  return {
+    id,
+    name: "Host",
+    avatarUrl: `https://i.pravatar.cc/800?u=${encodeURIComponent(id)}`,
+    country: "Pakistan",
+    flag: "🇵🇰",
+    language: "Urdu",
+    rating: 4.8,
+    callRate: 45,
+    followers: 1200,
+    verified: true,
+    online: true,
+    live: false,
+    onCall: false,
+    tags: ["Chat", "Call"],
+    bio: "Let's talk — tap Message or Call.",
+    isNew: false,
+    trendingScore: 1000,
+    nearby: false,
+    recentlyActive: true,
+    source: "live",
+    gender: "female",
+    age: 22 + (seed % 6),
+  };
 }

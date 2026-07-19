@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Percent, Search, X } from "lucide-react";
+import { Percent, Search, Video, X } from "lucide-react";
 import {
   HostGridCard,
   HostGridSkeleton,
@@ -21,14 +21,16 @@ import { useApp } from "@/lib/store";
 type Tab = "live" | "call";
 
 const DISCOUNT_KEY = "luma_home_discount_dismissed";
+const REGIONS = ["All", "Pakistan", "Philippines", "Brazil", "Vietnam", "India"] as const;
 
-/** Clean home — Live + Calling host cards only, plus a small discount popup */
+/** Clean home — Live + Calling host cards, modern profile cards */
 export function HomeScreen() {
-  const { freeTrialAvailable } = useApp();
+  const { freeTrialAvailable, coins } = useApp();
   const [hosts, setHosts] = useState<DiscoverHost[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<Tab>("live");
+  const [tab, setTab] = useState<Tab>("call");
+  const [region, setRegion] = useState<(typeof REGIONS)[number]>("All");
   const [discountOpen, setDiscountOpen] = useState(false);
 
   useEffect(() => {
@@ -67,10 +69,16 @@ export function HomeScreen() {
     }
   };
 
-  const filtered = useMemo(
-    () => filterHosts(hosts, { query, category: "All" }),
-    [hosts, query],
-  );
+  const filtered = useMemo(() => {
+    let list = filterHosts(hosts, { query, category: "All" });
+    if (region !== "All") {
+      list = list.filter((h) =>
+        h.country.toLowerCase().includes(region.toLowerCase()),
+      );
+    }
+    return list;
+  }, [hosts, query, region]);
+
   const liveHosts = useMemo(
     () => filtered.filter((h) => h.live),
     [filtered],
@@ -84,22 +92,38 @@ export function HomeScreen() {
 
   return (
     <main className="relative pb-28">
-      <header className="sticky top-0 z-30 border-b border-line/50 bg-ink/80 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-coral">
-              Luma
-            </p>
-            <h1 className="font-display text-2xl font-extrabold leading-none">
-              Discover
-            </h1>
-          </div>
+      <header className="overflow-hidden bg-gradient-to-br from-[#ffb020] via-[#ff9a1a] to-[#ff6b2b] px-4 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-black/50">
+            Luma
+          </p>
           <div className="flex items-center gap-2">
+            <span className="rounded-full bg-black/15 px-2.5 py-1 text-[10px] font-bold text-black/80">
+              {coins} ¢
+            </span>
             <ThemeToggle />
-            <WalletDiamond />
+            <WalletDiamond compact />
+            <Link
+              href="/call"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff6b1a] text-white shadow"
+              aria-label="Video lobby"
+            >
+              <Video className="h-4 w-4" />
+            </Link>
           </div>
         </div>
+        <h1 className="font-display text-[1.85rem] font-extrabold leading-tight text-[#2a1600]">
+          Meet more friends.
+        </h1>
+        <Link
+          href="/match"
+          className="mt-3 inline-flex items-center rounded-full bg-white/90 px-4 py-2 text-xs font-bold text-[#2a1600] shadow"
+        >
+          Tap to Match →
+        </Link>
+      </header>
 
+      <div className="sticky top-0 z-30 border-b border-line/50 bg-ink/90 px-4 pb-3 pt-3 backdrop-blur-xl">
         <label className="flex items-center gap-2 rounded-2xl border border-line bg-ink-2/70 px-3 py-2.5">
           <Search className="h-4 w-4 shrink-0 text-muted" />
           <input
@@ -109,6 +133,29 @@ export function HomeScreen() {
             className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
           />
         </label>
+
+        <div className="mt-3 flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {REGIONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setRegion(r)}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold ${
+                region === r
+                  ? "bg-[#ff9f1a] text-black"
+                  : "bg-white/8 text-white/70"
+              }`}
+            >
+              {r === "Pakistan"
+                ? "🇵🇰 Pakistan"
+                : r === "Philippines"
+                  ? "🇵🇭 Philippines"
+                  : r === "Brazil"
+                    ? "🇧🇷 Brazil"
+                    : r}
+            </button>
+          ))}
+        </div>
 
         <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl border border-line bg-ink-2/60 p-1">
           <button
@@ -127,14 +174,14 @@ export function HomeScreen() {
             onClick={() => setTab("call")}
             className={`rounded-xl py-2.5 text-center text-xs font-bold transition ${
               tab === "call"
-                ? "bg-teal text-ink"
+                ? "bg-[#ff9f1a] text-black"
                 : "text-muted hover:text-sand"
             }`}
           >
             Online
           </button>
         </div>
-      </header>
+      </div>
 
       <div className="mt-4">
         {loading ? (
@@ -168,7 +215,6 @@ export function HomeScreen() {
         )}
       </div>
 
-      {/* Little discount / promo popup */}
       <AnimatePresence>
         {discountOpen ? (
           <motion.aside
@@ -182,34 +228,32 @@ export function HomeScreen() {
               <button
                 type="button"
                 onClick={dismissDiscount}
-                className="absolute right-2 top-2 rounded-full p-1.5 text-muted hover:bg-ink-3 hover:text-sand"
+                className="absolute right-2 top-2 rounded-full bg-ink-3 p-1 text-muted"
                 aria-label="Dismiss"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-              <div className="flex items-center gap-3 pr-6">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold/20 text-gold">
+              <div className="flex items-start gap-3 pr-6">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/20 text-gold">
                   <Percent className="h-5 w-5" />
                 </span>
-                <div className="min-w-0 flex-1">
+                <div>
                   <p className="font-display text-sm font-bold text-sand">
                     {freeTrialAvailable
-                      ? "First call free · 30s"
-                      : "Coin pack · +20% bonus"}
+                      ? "First call discount"
+                      : "Coin boost available"}
                   </p>
-                  <p className="text-[11px] text-muted">
-                    {freeTrialAvailable
-                      ? "Try a host on Match — no coins needed"
-                      : "Limited offer on popular packs"}
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    Message a host or start a call — gifts keep the spark going.
                   </p>
+                  <Link
+                    href="/profile"
+                    onClick={dismissDiscount}
+                    className="mt-2 inline-flex text-[11px] font-bold text-gold"
+                  >
+                    Open wallet →
+                  </Link>
                 </div>
-                <Link
-                  href={freeTrialAvailable ? "/match" : "/profile"}
-                  onClick={dismissDiscount}
-                  className="shrink-0 rounded-full bg-gold px-3 py-1.5 text-[11px] font-bold text-ink"
-                >
-                  Claim
-                </Link>
               </div>
             </div>
           </motion.aside>
