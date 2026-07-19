@@ -91,6 +91,32 @@ export async function fetchCallToken(callId: string) {
   }>(res);
 }
 
+export async function searchProfileByAppId(appId: string): Promise<{
+  userId: string;
+  appId: string;
+  displayName: string;
+  avatarUrl?: string;
+  role: "user" | "host";
+} | null> {
+  const cleaned = appId.trim().replace(/\D/g, "");
+  if (!/^\d{6}$/.test(cleaned)) return null;
+  const res = await fetch(
+    `${requireApiBase()}/profiles/search?appId=${encodeURIComponent(cleaned)}`,
+    { cache: "no-store" },
+  );
+  if (res.status === 404) return null;
+  const data = await parse<{
+    profile: {
+      userId: string;
+      appId: string;
+      displayName: string;
+      avatarUrl?: string;
+      role: "user" | "host";
+    };
+  }>(res);
+  return data.profile;
+}
+
 export async function waitForAccept(
   callId: string,
   onTick?: (status: BridgeCall["status"]) => void,

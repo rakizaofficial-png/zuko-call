@@ -318,6 +318,10 @@ export default function HostOnlyLiveRoomPage({
 
   const sendQuickGift = async (giftId: string) => {
     if (!room) return;
+    if (userId === room.hostId) {
+      pushToast?.("Hosts cannot gift themselves!");
+      return;
+    }
     const g = gifts.find((x) => x.id === giftId);
     if (!g) return;
     try {

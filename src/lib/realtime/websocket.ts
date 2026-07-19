@@ -20,6 +20,7 @@ import { apiConfig } from "@/config/apiConfig";
 
 export type RealtimeEvent =
   | { type: "connected"; payload: { userId: string } }
+  | { type: "call:ended"; payload: { id?: string; status?: string } & Record<string, unknown> }
   | { type: "call:incoming"; payload: Record<string, unknown> }
   | { type: "call:update"; payload: Record<string, unknown> }
   | {

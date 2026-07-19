@@ -10,13 +10,14 @@ import {
 } from "@/components/host/PremiumHostCard";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { WalletDiamond } from "@/components/WalletDiamond";
-import { fetchLiveHosts } from "@/lib/api";
+import { fetchLiveHosts, searchProfileByAppId } from "@/lib/api";
 import {
   filterHosts,
   mergeDiscoverHosts,
   type DiscoverHost,
 } from "@/lib/discoverHosts";
 import { useApp } from "@/lib/store";
+import { useRouter } from "next/navigation";
 
 type Tab = "live" | "call";
 
@@ -25,13 +26,15 @@ const REGIONS = ["All", "Pakistan", "Philippines", "Brazil", "Vietnam", "India"]
 
 /** Clean home — Live + Calling host cards, modern profile cards */
 export function HomeScreen() {
-  const { freeTrialAvailable, coins } = useApp();
+  const { freeTrialAvailable, coins, pushToast } = useApp();
+  const router = useRouter();
   const [hosts, setHosts] = useState<DiscoverHost[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("call");
   const [region, setRegion] = useState<(typeof REGIONS)[number]>("All");
   const [discountOpen, setDiscountOpen] = useState(false);
+  const [searchingId, setSearchingId] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +93,29 @@ export function HomeScreen() {
 
   const list = tab === "live" ? liveHosts : callingHosts;
 
+  const runAppIdSearch = async () => {
+    const q = query.trim();
+    if (!/^\d{6}$/.test(q)) return;
+    setSearchingId(true);
+    try {
+      const profile = await searchProfileByAppId(q);
+      if (!profile) {
+        pushToast("User not found");
+        return;
+      }
+      if (profile.role === "host") {
+        router.push(`/host/${encodeURIComponent(profile.userId)}`);
+      } else {
+        pushToast(`Found ${profile.displayName} · ID ${profile.appId}`);
+        router.push(`/call/${encodeURIComponent(profile.userId)}?live=1`);
+      }
+    } catch {
+      pushToast("User not found");
+    } finally {
+      setSearchingId(false);
+    }
+  };
+
   return (
     <main className="relative pb-28">
       <header className="overflow-hidden bg-gradient-to-br from-[#ffb020] via-[#ff9a1a] to-[#ff6b2b] px-4 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -129,9 +155,22 @@ export function HomeScreen() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search hosts…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void runAppIdSearch();
+            }}
+            placeholder="Search hosts or 6-digit ID…"
             className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
           />
+          {/^\d{6}$/.test(query.trim()) ? (
+            <button
+              type="button"
+              disabled={searchingId}
+              onClick={() => void runAppIdSearch()}
+              className="shrink-0 rounded-lg bg-coral px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-60"
+            >
+              {searchingId ? "…" : "Go"}
+            </button>
+          ) : null}
         </label>
 
         <div className="mt-3 flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

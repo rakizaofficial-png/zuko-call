@@ -94,6 +94,21 @@ export async function setUserCameraOff(off: boolean) {
   await session.cam.setEnabled(!off);
 }
 
+/** Flip between front/back camera when multiple devices exist. */
+export async function switchUserCamera() {
+  if (!session?.cam) return;
+  try {
+    const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+    const cams = await AgoraRTC.getCameras();
+    if (cams.length < 2) return;
+    const current = session.cam.getTrackLabel();
+    const next = cams.find((c) => c.label !== current) || cams[0];
+    if (next?.deviceId) await session.cam.setDevice(next.deviceId);
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function stopUserAgoraCall() {
   if (!session) return;
   const { client, mic, cam } = session;

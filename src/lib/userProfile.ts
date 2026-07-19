@@ -11,6 +11,7 @@ export type UserProfile = {
   avatarUrl: string;
   createdAt: number;
   isNew: boolean;
+  appId?: string;
 };
 
 const PROFILE_KEY = "luma_user_profile_v1";

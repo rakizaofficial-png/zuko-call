@@ -5,6 +5,7 @@ import {
   createCall,
   endCall as endBridgeCall,
   fetchCallToken,
+  getCall,
   waitForAccept,
   type BridgeCall,
   type LiveHost,
@@ -59,17 +60,62 @@ export function useCallSessionEngine(opts: {
   const callIdRef = useRef<string | null>(null);
   const cancelledRef = useRef(false);
 
-  const disconnect = useCallback(async () => {
+  const disconnect = useCallback(async (opts?: { remoteEnded?: boolean }) => {
     cancelledRef.current = true;
     stopRingingTone();
     await stopUserAgoraCall();
     if (callIdRef.current) {
-      await endBridgeCall(callIdRef.current);
+      if (!opts?.remoteEnded) {
+        await endBridgeCall(callIdRef.current);
+      }
       callIdRef.current = null;
     }
     setState("DISCONNECTED");
     setStatusText("Call ended");
   }, []);
+
+  // Real-time sync: leave when peer ends the call
+  useEffect(() => {
+    if (state !== "CONNECTED" || !bridgeCall?.id) return;
+    const callId = bridgeCall.id;
+    let dead = false;
+
+    const poll = setInterval(() => {
+      void getCall(callId)
+        .then((c) => {
+          if (dead) return;
+          if (
+            c.status === "ended" ||
+            c.status === "missed" ||
+            c.status === "rejected"
+          ) {
+            void disconnect({ remoteEnded: true });
+          }
+        })
+        .catch(() => undefined);
+    }, 2000);
+
+    let offWs: (() => void) | undefined;
+    void import("@/lib/walletApi").then(({ getDeviceUserId }) => {
+      void import("@/lib/realtime/websocket").then(({ getRealtimeClient }) => {
+        if (dead) return;
+        const rt = getRealtimeClient(getDeviceUserId());
+        rt.connect();
+        offWs = rt.subscribe((ev) => {
+          if (ev.type !== "call:ended") return;
+          const id = String((ev.payload as { id?: string })?.id || "");
+          if (id && id !== callId) return;
+          void disconnect({ remoteEnded: true });
+        });
+      });
+    });
+
+    return () => {
+      dead = true;
+      clearInterval(poll);
+      offWs?.();
+    };
+  }, [state, bridgeCall?.id, disconnect]);
 
   useEffect(() => {
     if (!enabled) return;

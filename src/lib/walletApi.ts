@@ -18,6 +18,7 @@ export type WalletSnapshot = {
   isPremium: boolean;
   displayName: string;
   avatarUrl?: string;
+  appId?: string;
   created?: boolean;
 };
 

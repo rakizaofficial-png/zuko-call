@@ -30,6 +30,11 @@ export function GiftSheet({
 
   const send = async (id: string, coins: number, emoji: string, name: string) => {
     if (busy) return;
+    const me = getDeviceUserId();
+    if (hostId && me === hostId) {
+      pushToast?.("Hosts cannot gift themselves!");
+      return;
+    }
     setBusy(true);
     try {
       if (hostId) {
