@@ -88,7 +88,11 @@ export default function LivePage() {
               id,
               roomId: r.id,
               name: r.hostName || host?.name || "Host",
-              avatar: avatarFor(id, host?.avatarUrl || r.hostAvatar || r.thumbnailUrl),
+              avatar: avatarFor(
+                id,
+                host?.avatarUrl || r.hostAvatar || r.thumbnailUrl,
+                r.hostName || host?.name || "Host",
+              ),
               title: r.title || "Live now",
               viewers: Number(r.viewers) || 0,
               country: r.country || host?.country || "",
@@ -102,7 +106,7 @@ export default function LivePage() {
               id: h.id,
               roomId: `live_${h.id}`,
               name: h.name,
-              avatar: avatarFor(h.id, h.avatarUrl),
+              avatar: avatarFor(h.id, h.avatarUrl, h.name),
               title: "Live now",
               viewers: 0,
               country: h.country || "",
@@ -229,6 +233,11 @@ export default function LivePage() {
                 src={card.avatar}
                 alt={card.name}
                 className="aspect-[3/4] w-full object-cover transition duration-500 group-hover:scale-105"
+                onError={(e) => {
+                  const el = e.currentTarget;
+                  const fallback = avatarFor(card.id, null, card.name);
+                  if (el.src !== fallback) el.src = fallback;
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-black/20" />
               <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold text-white">

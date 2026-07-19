@@ -3,11 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type MouseEvent } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Send, Video } from "lucide-react";
 import type { DiscoverHost } from "@/lib/discoverHosts";
 import { openDmWithHost } from "@/lib/dmStore";
+import { defaultHostAvatar } from "@/lib/hostAvatar";
 
 type Mode = "call" | "watch";
 
@@ -16,6 +17,39 @@ function statusLabel(host: DiscoverHost, mode: Mode) {
   if (host.onCall) return { text: "Busy", tone: "busy" as const };
   if (host.online) return { text: "Online", tone: "online" as const };
   return { text: "Offline", tone: "off" as const };
+}
+
+function HostPhoto({
+  host,
+  sizes,
+  className,
+}: {
+  host: DiscoverHost;
+  sizes: string;
+  className?: string;
+}) {
+  const fallback = defaultHostAvatar(host.id, host.name);
+  const [src, setSrc] = useState(host.avatarUrl || fallback);
+
+  useEffect(() => {
+    setSrc(host.avatarUrl || fallback);
+  }, [host.avatarUrl, fallback]);
+
+  return (
+    <Image
+      src={src}
+      alt={host.name}
+      fill
+      className={className || "object-cover"}
+      sizes={sizes}
+      unoptimized={
+        src.includes("ui-avatars.com") || src.includes("firebasestorage")
+      }
+      onError={() => {
+        if (src !== fallback) setSrc(fallback);
+      }}
+    />
+  );
 }
 
 /** Modern portrait card — Online/Busy, name, gender, country, rate, chat + video */
@@ -63,26 +97,15 @@ export function HostGridCard({
       className="group relative overflow-hidden rounded-[1.35rem] bg-[#1a1a1f] shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
     >
       <Link href={profileHref} className="relative block aspect-[3/4] w-full">
-        <Image
-          src={host.avatarUrl}
-          alt={host.name}
-          fill
-          className="object-cover transition duration-500 group-hover:scale-105"
+        <HostPhoto
+          host={host}
           sizes="(max-width: 430px) 50vw, 200px"
+          className="object-cover transition duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/25" />
 
-        {/* Status */}
         <div className="absolute left-2 top-2">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-md ${
-              status.tone === "live"
-                ? "bg-black/55"
-                : status.tone === "busy"
-                  ? "bg-black/55"
-                  : "bg-black/55"
-            }`}
-          >
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-md">
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 status.tone === "live"
@@ -98,7 +121,6 @@ export function HostGridCard({
           </span>
         </div>
 
-        {/* Info */}
         <div className="absolute inset-x-0 bottom-0 p-2.5 pr-[4.5rem]">
           <p className="flex items-center gap-1 truncate font-display text-[13px] font-extrabold text-white">
             <span className="truncate">{host.name}</span>
@@ -119,7 +141,6 @@ export function HostGridCard({
         </div>
       </Link>
 
-      {/* Action buttons */}
       <div className="pointer-events-auto absolute bottom-2.5 right-2.5 z-10 flex flex-col gap-2">
         <button
           type="button"
@@ -182,13 +203,7 @@ export function PremiumHostCard({
         className="relative flex w-[148px] shrink-0 flex-col overflow-hidden rounded-2xl bg-ink-2"
       >
         <div className="relative h-[168px] w-full">
-          <Image
-            src={host.avatarUrl}
-            alt={host.name}
-            fill
-            className="object-cover"
-            sizes="148px"
-          />
+          <HostPhoto host={host} sizes="148px" className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-transparent" />
           {(host.online || host.live) && (
             <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white backdrop-blur">
