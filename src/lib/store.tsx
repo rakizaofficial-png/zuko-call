@@ -159,7 +159,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (amount: number, label: string) => {
       if (amount <= 0) return;
       try {
-        const wallet = await creditCoinsApi({ amount, reason: label });
+        const wallet = await creditCoinsApi({
+          amount,
+          reason: label.toLowerCase().startsWith("reward")
+            ? label
+            : `reward:${label}`,
+        });
         setCoins(wallet.coinBalance);
         setXp(wallet.xp);
         appendLocalHistory(amount, label, "credit");
@@ -426,9 +431,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPremium(true);
         setCoins(wallet.coinBalance);
         setXp(wallet.xp);
-      } catch {
-        pushToast("VIP activation failed — check connection");
-        return;
+      } catch (e) {
+        pushToast(
+          e instanceof Error
+            ? e.message
+            : "VIP requires verified purchase",
+        );
+        throw e;
       }
       if (welcomeCoins > 0) {
         await creditReward(welcomeCoins, `VIP · +${welcomeCoins} welcome coins`);

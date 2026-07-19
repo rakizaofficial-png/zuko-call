@@ -35,7 +35,10 @@ export function GiftSheet({
       if (hostId) {
         const res = await fetch(`${requireApiBase()}/gifts/send`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-Id": getDeviceUserId(),
+          },
           body: JSON.stringify({
             userId: getDeviceUserId(),
             userName: "Luma Fan",

@@ -105,16 +105,20 @@ function useOfferCountdown(hours = 6) {
 }
 
 export default function PremiumPage() {
-  const { isPremium, activatePremium, pushToast, xp, vipTier } = useApp();
+  const { isPremium, activatePremium, pushToast, xp, vipTier, openTopUp } =
+    useApp();
   const [busy, setBusy] = useState<string | null>(null);
   const countdown = useOfferCountdown(6);
 
   const subscribe = async (planId: string) => {
     const plan = plans.find((p) => p.id === planId)!;
     setBusy(planId);
-    pushToast("Activating VIP…");
+    pushToast("VIP requires a verified purchase…");
     try {
       await activatePremium(plan.id, plan.coins);
+    } catch {
+      openTopUp(30);
+      pushToast("Complete a coin purchase to unlock VIP");
     } finally {
       setBusy(null);
     }

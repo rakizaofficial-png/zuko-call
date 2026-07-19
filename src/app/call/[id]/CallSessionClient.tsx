@@ -48,7 +48,7 @@ export default function CallSessionClient({
   const isBlur = search.get("blur") === "1";
   const trialParam = search.get("trial") === "1";
   const {
-    spend,
+    spendAsync,
     pushToast,
     isPremium,
     coins,
@@ -76,7 +76,7 @@ export default function CallSessionClient({
     onConnected: ({ transport, name }) => {
       pushToast(
         transport === "ai_prerecorded"
-          ? `You’re live with ${name}`
+          ? `${name} · preview host (AI clip) while live hosts are busy`
           : `You’re live with ${name}`,
       );
     },
@@ -157,37 +157,39 @@ export default function CallSessionClient({
 
         if (next > 0 && next % 10 === 0) {
           const cost = sliceCost(rate);
-          const ok = spend(cost, `−${cost} coins · 10s`);
-          setDeductFlash(cost);
-          setTimeout(() => setDeductFlash(null), 900);
-          if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-            navigator.vibrate?.(12);
-          }
-          if (!ok) {
-            setLowBalance(true);
-            setGraceLeft(15);
-            openTopUp(15);
-            if (!graceRef.current) {
-              graceRef.current = setInterval(() => {
-                setGraceLeft((g) => {
-                  if (g <= 1) {
-                    if (graceRef.current) clearInterval(graceRef.current);
-                    graceRef.current = null;
-                    void hangUpRef.current();
-                    pushToast("Call ended — top up to continue");
-                    return 0;
-                  }
-                  return g - 1;
-                });
-              }, 1000);
+          void (async () => {
+            const ok = await spendAsync(cost, `−${cost} coins · 10s`);
+            setDeductFlash(cost);
+            setTimeout(() => setDeductFlash(null), 900);
+            if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+              navigator.vibrate?.(12);
             }
-          } else if (ok && lowBalance) {
-            setLowBalance(false);
-            if (graceRef.current) {
-              clearInterval(graceRef.current);
-              graceRef.current = null;
+            if (!ok) {
+              setLowBalance(true);
+              setGraceLeft(15);
+              openTopUp(15);
+              if (!graceRef.current) {
+                graceRef.current = setInterval(() => {
+                  setGraceLeft((g) => {
+                    if (g <= 1) {
+                      if (graceRef.current) clearInterval(graceRef.current);
+                      graceRef.current = null;
+                      void hangUpRef.current();
+                      pushToast("Call ended — top up to continue");
+                      return 0;
+                    }
+                    return g - 1;
+                  });
+                }, 1000);
+              }
+            } else if (lowBalance) {
+              setLowBalance(false);
+              if (graceRef.current) {
+                clearInterval(graceRef.current);
+                graceRef.current = null;
+              }
             }
-          }
+          })();
         }
         return next;
       });
@@ -204,7 +206,7 @@ export default function CallSessionClient({
     isBlur,
     isConnected,
     rate,
-    spend,
+    spendAsync,
     pushToast,
     lowBalance,
     openTopUp,
@@ -219,8 +221,10 @@ export default function CallSessionClient({
   const clearBlur = () => {
     if (!isBlur || blurReveal >= 1) return;
     const bonus = Math.max(20, Math.round(rate * 0.4));
-    if (!spend(bonus, `Instant Clear · −${bonus} coins`)) return;
-    setBlurReveal(1);
+    void (async () => {
+      const ok = await spendAsync(bonus, `Instant Clear · −${bonus} coins`);
+      if (ok) setBlurReveal(1);
+    })();
   };
 
   return (
