@@ -14,6 +14,8 @@ export type WelcomePushHost = {
   name: string;
   age: number;
   avatar: string;
+  /** Short looping MP4 behind the ringing UI (2–4s aesthetic loop) */
+  ring_video_url: string;
   teaser_video_url: string;
   country: string;
   /** ISO-ish country flag emoji */
@@ -31,6 +33,8 @@ export type WelcomePushHost = {
   message: string;
   messageId: string;
   source: WelcomeHostSource;
+  /** Media pack id — keeps avatar + ring video matched */
+  mediaPackId?: string;
 };
 
 export type WelcomePaywallTier = {

@@ -11,7 +11,7 @@ import { ensurePremiumFemalePool } from "@/lib/welcomePush/premiumFemaleGenerato
 
 /**
  * Simulated premium female incoming-call engine.
- * Fires 3–5s after home/dashboard entry → teaser → recharge paywall.
+ * Fires every 1–2 min while browsing → video ring → answer → recharge if broke.
  */
 export function WelcomePushEngine() {
   const pathname = usePathname();

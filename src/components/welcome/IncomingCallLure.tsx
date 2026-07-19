@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { BadgeCheck, Crown, Globe2, Phone, PhoneOff, Sparkles } from "lucide-react";
 import type { WelcomePushHost } from "@/lib/welcomePush/config";
 
 /**
- * Full-screen incoming call lure — premium motion, diversified host card.
+ * Full-screen incoming call lure — looping premium video background
+ * with matching glamorous host thumbnail overlay.
  */
 export function IncomingCallLure({
   host,
@@ -19,6 +21,23 @@ export function IncomingCallLure({
   onAccept: () => void;
   onReject: () => void;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = true;
+    el.playsInline = true;
+    const play = () => {
+      void el.play().catch(() => {
+        /* autoplay policies — poster still shows */
+      });
+    };
+    play();
+    el.addEventListener("loadeddata", play);
+    return () => el.removeEventListener("loadeddata", play);
+  }, [host.ring_video_url]);
+
   return (
     <motion.div
       className="fixed inset-0 z-[100] mx-auto flex w-full max-w-[430px] flex-col overflow-hidden bg-[#06040b]"
@@ -27,23 +46,37 @@ export function IncomingCallLure({
       exit={{ opacity: 0, y: 16, scale: 0.98 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
     >
+      {/* Full-screen looping ring video */}
       <motion.div
         className="absolute inset-0"
-        initial={{ scale: 1.08 }}
+        initial={{ scale: 1.06 }}
         animate={{ scale: 1 }}
-        transition={{ duration: 1.2, ease: "easeOut" }}
+        transition={{ duration: 1.15, ease: "easeOut" }}
       >
+        <video
+          ref={videoRef}
+          className="absolute inset-0 h-full w-full object-cover"
+          src={host.ring_video_url}
+          poster={host.avatar}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          aria-hidden
+        />
+        {/* Fallback still if video stalls */}
         <Image
           src={host.avatar}
-          alt={host.name}
+          alt=""
           fill
           priority
-          className="object-cover brightness-[0.42]"
+          className="object-cover opacity-0"
+          aria-hidden
         />
       </motion.div>
-      <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-[#06040b]/45 to-[#06040b]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-[#06040b]/40 to-[#06040b]/92" />
 
-      {/* Ambient glow pulses */}
       <motion.div
         aria-hidden
         className="pointer-events-none absolute -left-20 top-24 h-56 w-56 rounded-full bg-cyan/20 blur-3xl"
@@ -57,7 +90,6 @@ export function IncomingCallLure({
         transition={{ duration: 2.8, repeat: Infinity, delay: 0.4 }}
       />
 
-      {/* Top status */}
       <div className="relative z-10 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan">
           Luma · Private video
@@ -95,11 +127,10 @@ export function IncomingCallLure({
               alt=""
               width={140}
               height={140}
-              className="relative h-[140px] w-[140px] rounded-full object-cover ring-4 ring-cyan/60 shadow-[0_0_40px_rgba(0,240,255,0.45)]"
+              className="relative h-[140px] w-[140px] rounded-full object-cover object-top ring-4 ring-cyan/60 shadow-[0_0_40px_rgba(0,240,255,0.45)]"
             />
           </motion.div>
 
-          {/* Badges */}
           <div className="absolute -bottom-1 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1">
             {host.isVerified && (
               <span className="inline-flex items-center gap-0.5 rounded-full border border-cyan/40 bg-black/70 px-1.5 py-0.5 text-[9px] font-bold text-cyan backdrop-blur">
@@ -193,7 +224,6 @@ export function IncomingCallLure({
         </motion.p>
       </div>
 
-      {/* Actions */}
       <div className="relative z-10 w-full px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
         <div className="mb-3 flex items-center justify-center gap-2">
           <span className="h-1 w-1 animate-ping rounded-full bg-teal" />
@@ -228,11 +258,13 @@ export function IncomingCallLure({
           >
             <motion.span
               className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-[0_0_32px_rgba(16,185,129,0.7)]"
-              animate={{ boxShadow: [
-                "0 0 24px rgba(16,185,129,0.5)",
-                "0 0 40px rgba(16,185,129,0.85)",
-                "0 0 24px rgba(16,185,129,0.5)",
-              ] }}
+              animate={{
+                boxShadow: [
+                  "0 0 24px rgba(16,185,129,0.5)",
+                  "0 0 40px rgba(16,185,129,0.85)",
+                  "0 0 24px rgba(16,185,129,0.5)",
+                ],
+              }}
               transition={{ duration: 1.4, repeat: Infinity }}
             >
               <Phone className="h-8 w-8 text-white" fill="currentColor" />

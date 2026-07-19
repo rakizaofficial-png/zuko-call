@@ -18,16 +18,20 @@ import {
   stopWelcomeRingTone,
 } from "@/lib/welcomePush/ringtone";
 import { pickRandomStatusLine } from "@/lib/welcomePush/uiCopy";
+import { useApp } from "@/lib/store";
 
 /**
  * Lifecycle:
- * IDLE → pick diversified host → INCOMING_CALL (ringtone)
- *      → Accept → TEASER → PAYWALL → IDLE (schedule randomized next)
- *      → Reject / timeout → IDLE (schedule randomized next)
- *
- * Never reuses the same host/message within the cooldown window.
+ * IDLE → (1–2 min browse/inactivity) → INCOMING_CALL (ringtone + video bg)
+ *      → Accept + 0 coins → PAYWALL (blurred call) immediately
+ *      → Accept + coins → TEASER → PAYWALL → IDLE
+ *      → Reject / timeout → IDLE (schedule next 1–2 min)
  */
 export function useWelcomePushCall(opts: { enabled: boolean }) {
+  const { coins } = useApp();
+  const coinsRef = useRef(coins);
+  coinsRef.current = coins;
+
   const [phase, setPhase] = useState<WelcomePushPhase>("IDLE");
   const [host, setHost] = useState<WelcomePushHost>(WELCOME_PUSH_HOST);
   const [statusLine, setStatusLine] = useState("Ringing…");
@@ -38,6 +42,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   const offerTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const ringTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const repeatTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleSinceRef = useRef<number>(Date.now());
   const phaseRef = useRef<WelcomePushPhase>("IDLE");
   const pickingRef = useRef(false);
 
@@ -63,20 +68,30 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
 
   const triggerIncoming = useCallback(async () => {
     if (!opts.enabled) return;
+    if (typeof document !== "undefined" && document.hidden) {
+      // Defer while tab hidden — reschedule shortly
+      if (repeatTimer.current) clearTimeout(repeatTimer.current);
+      repeatTimer.current = setTimeout(() => {
+        void triggerIncoming();
+      }, nextRepeatDelayMs());
+      return;
+    }
     if (phaseRef.current !== "IDLE" && phaseRef.current !== "DONE") return;
     if (pickingRef.current) return;
     pickingRef.current = true;
     try {
       const next = await pickNextWelcomeCaller();
-      // Prefer admin library teaser when available (additive)
-      try {
-        const { resolveLibraryTeaserUrl } = await import(
-          "@/lib/welcomePush/libraryTeaser"
-        );
-        const teaser = await resolveLibraryTeaserUrl();
-        if (teaser) next.teaser_video_url = teaser;
-      } catch {
-        /* keep host teaser */
+      // Prefer matched pack teaser; only overlay library if pack missing
+      if (!next.teaser_video_url) {
+        try {
+          const { resolveLibraryTeaserUrl } = await import(
+            "@/lib/welcomePush/libraryTeaser"
+          );
+          const teaser = await resolveLibraryTeaserUrl();
+          if (teaser) next.teaser_video_url = teaser;
+        } catch {
+          /* keep host teaser */
+        }
       }
       if (!opts.enabled) return;
       if (phaseRef.current !== "IDLE" && phaseRef.current !== "DONE") return;
@@ -94,6 +109,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   const scheduleNext = useCallback(
     (delayMs: number) => {
       if (repeatTimer.current) clearTimeout(repeatTimer.current);
+      idleSinceRef.current = Date.now();
       repeatTimer.current = setTimeout(() => {
         void triggerIncoming();
       }, delayMs);
@@ -101,7 +117,43 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     [triggerIncoming],
   );
 
-  // First call + recurring while on home (randomized delays)
+  // Soft inactivity: user activity while IDLE pushes the next ring out
+  // so calls feel unexpected after quiet browsing, not mid-tap spam.
+  useEffect(() => {
+    if (!opts.enabled) return;
+    const bump = () => {
+      if (phaseRef.current !== "IDLE" && phaseRef.current !== "DONE") return;
+      const elapsed = Date.now() - idleSinceRef.current;
+      // Only reschedule if we're already past half the window (active browsing)
+      if (elapsed < 20_000) return;
+      idleSinceRef.current = Date.now();
+      scheduleNext(nextRepeatDelayMs());
+    };
+    const events: (keyof WindowEventMap)[] = [
+      "pointerdown",
+      "touchstart",
+      "keydown",
+      "scroll",
+    ];
+    for (const ev of events) {
+      window.addEventListener(ev, bump, { passive: true });
+    }
+    const onVis = () => {
+      if (document.hidden) return;
+      if (phaseRef.current === "IDLE" || phaseRef.current === "DONE") {
+        scheduleNext(nextRepeatDelayMs());
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      for (const ev of events) {
+        window.removeEventListener(ev, bump);
+      }
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [opts.enabled, scheduleNext]);
+
+  // First call after 1–2 min on dashboard + recurring
   useEffect(() => {
     if (!opts.enabled) {
       clearTimers();
@@ -116,7 +168,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     };
   }, [opts.enabled, clearTimers, scheduleNext]);
 
-  // Ringtone + auto-dismiss (randomized ring window)
+  // Ringtone + auto-dismiss
   useEffect(() => {
     if (phase !== "INCOMING_CALL") {
       stopWelcomeRingTone();
@@ -173,6 +225,11 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     if (ringTimer.current) {
       clearTimeout(ringTimer.current);
       ringTimer.current = null;
+    }
+    // Monetization hook: zero balance → recharge immediately (blurred call)
+    if (coinsRef.current <= 0) {
+      setPhase("PAYWALL_BOOST");
+      return;
     }
     setPhase("TEASER_PLAYING");
     teaserTimer.current = setTimeout(() => {

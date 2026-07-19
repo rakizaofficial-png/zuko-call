@@ -237,6 +237,16 @@ export default function CallSessionClient({
                   if (typeof result.userBalance === "number") {
                     applyLocalCoins(result.userBalance);
                   }
+                  // Mirror Express ledger so later syncWallet cannot restore coins
+                  try {
+                    await spendCoinsApi({
+                      amount: amt,
+                      reason: `call_minute_fb_mirror_${billSessionId}`,
+                      meta: { hostId: hostIdForBill, mirroredFrom: "firebase" },
+                    });
+                  } catch {
+                    /* Express may already be lower — UI trusts Firebase balance */
+                  }
                   const bal = result.userBalance ?? coins - amt;
                   if (bal < chargeRate) {
                     pushToast("Coins exhausted. Disconnecting...");
@@ -330,6 +340,12 @@ export default function CallSessionClient({
                   }
                 }
               }
+            } catch (err) {
+              pushToast(
+                err instanceof Error
+                  ? err.message
+                  : "Billing error — reconnecting…",
+              );
             } finally {
               billingBusyRef.current = false;
             }

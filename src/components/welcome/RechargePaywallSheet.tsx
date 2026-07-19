@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock3, Sparkles, Zap } from "lucide-react";
 import {
@@ -10,8 +11,8 @@ import { purchaseCoins } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 
 /**
- * High-conversion recharge paywall — slides up the millisecond teaser dies.
- * Credits only after server IAP verify.
+ * High-conversion recharge paywall — opens the moment Answer hits 0 coins.
+ * Blurred looping call video stays behind the sheet as FOMO pressure.
  */
 export function RechargePaywallSheet({
   open,
@@ -26,13 +27,21 @@ export function RechargePaywallSheet({
 }) {
   const { userId, pushToast, syncWallet, setPremium } = useApp();
   const tiers = buildPaywallTiers(host.name);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = true;
+    void el.play().catch(() => undefined);
+  }, [open, host.ring_video_url]);
 
   const buy = async (tier: (typeof tiers)[number]) => {
     if (!userId) {
       pushToast("Wallet not ready");
       return;
     }
-    // Map welcome tiers → production IAP productIds
     const productMap: Record<string, string> = {
       unlock_5: "luma_coins_50",
       popular_50: "luma_coins_50",
@@ -64,18 +73,38 @@ export function RechargePaywallSheet({
     <AnimatePresence>
       {open && (
         <>
+          {/* Blurred live call backdrop */}
           <motion.div
-            className="fixed inset-0 z-[110] bg-black/70"
+            className="fixed inset-0 z-[110] mx-auto max-w-[430px] overflow-hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-          />
+          >
+            <video
+              ref={videoRef}
+              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl brightness-[0.35]"
+              src={host.ring_video_url || host.teaser_video_url}
+              poster={host.avatar}
+              autoPlay
+              muted
+              loop
+              playsInline
+              aria-hidden
+            />
+            <div
+              className="absolute inset-0 bg-cover bg-center opacity-40 blur-2xl"
+              style={{ backgroundImage: `url(${host.avatar})` }}
+              aria-hidden
+            />
+            <div className="absolute inset-0 bg-black/55 backdrop-blur-md" />
+          </motion.div>
+
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed bottom-0 left-1/2 z-[120] w-full max-w-[430px] -translate-x-1/2 rounded-t-[1.75rem] border border-cyan/30 bg-[#0a0812] px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-30px_80px_rgba(255,42,122,0.25)]"
+            className="fixed bottom-0 left-1/2 z-[120] w-full max-w-[430px] -translate-x-1/2 rounded-t-[1.75rem] border border-cyan/30 bg-[#0a0812]/95 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-30px_80px_rgba(255,42,122,0.25)] backdrop-blur-xl"
           >
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-cyan/40" />
 

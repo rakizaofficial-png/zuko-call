@@ -418,6 +418,7 @@ export function demoSeedToPartial(
     name: seed.name,
     age: seed.age,
     avatar: avatar(seed.avatarSeed),
+    ring_video_url: FALLBACK_TEASER,
     teaser_video_url: FALLBACK_TEASER,
     country: seed.country,
     flag: seed.flag,

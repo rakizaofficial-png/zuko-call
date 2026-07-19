@@ -19,12 +19,11 @@ export const WELCOME_PUSH_HOST: WelcomePushHost = {
   name: "Mira",
   age: 23,
   avatar:
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900&h=1200&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1496440737103-cd596325d314?w=900&h=1400&fit=crop&q=85",
+  ring_video_url: "https://assets.mixkit.co/videos/1215/1215-720.mp4",
   teaser_video_url:
     process.env.NEXT_PUBLIC_WELCOME_TEASER_URL ||
-    (process.env.NEXT_PUBLIC_AI_HOST_CDN
-      ? `${process.env.NEXT_PUBLIC_AI_HOST_CDN.replace(/\/$/, "")}/ai_aisha_welcome/teaser.mp4`
-      : "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4"),
+    "https://assets.mixkit.co/videos/1215/1215-720.mp4",
   country: "Korea",
   flag: "🇰🇷",
   language: "Korean · English",
@@ -38,6 +37,7 @@ export const WELCOME_PUSH_HOST: WelcomePushHost = {
   message: "Hi, I'm online now.",
   messageId: "m01",
   source: "demo",
+  mediaPackId: "bikini_beach_01",
 };
 
 export function buildPaywallTiers(hostName: string): WelcomePaywallTier[] {
@@ -74,21 +74,25 @@ export function buildPaywallTiers(hostName: string): WelcomePaywallTier[] {
 export const WELCOME_PAYWALL_TIERS = buildPaywallTiers("her");
 
 export const WELCOME_PUSH_CONFIG = {
-  /** First lure after home / dashboard entry (3–5s) */
-  launchDelayMinMs: 3_000,
-  launchDelayMaxMs: 5_000,
-  /** Recurring lure — keep pressure without spam */
-  repeatEveryMinMs: 90_000,
-  repeatEveryMaxMs: 2 * 60_000 + 30_000,
+  /**
+   * First lure after home / dashboard browsing.
+   * Natural 1–2 min window — never spam on entry.
+   */
+  launchDelayMinMs: 60_000,
+  launchDelayMaxMs: 120_000,
+  /** Recurring lure while browsing — fluctuating 1–2 min */
+  repeatEveryMinMs: 60_000,
+  repeatEveryMaxMs: 120_000,
   /** Incoming modal + ringtone auto-end */
   ringDurationMinMs: 22_000,
   ringDurationMaxMs: 35_000,
-  /** Teaser hard-cut → recharge paywall (retention push) */
-  teaserCutMs: 3200,
+  /** Teaser hard-cut → recharge paywall (when user has coins) */
+  teaserCutMs: 2800,
   /** Paywall FOMO countdown */
   offerSeconds: 45,
   /** Don't reuse these many recent hosts / messages */
   hostCooldownCount: 10,
   messageCooldownCount: 14,
-  storageKey: "luma_welcome_push_v4",
+  /** Bump when media / timing rules change */
+  storageKey: "luma_welcome_push_v5",
 } as const;
