@@ -243,5 +243,5 @@ export const engagingLines = [
 ];
 
 export function getCreator(id: string) {
-  return creators.find((c) => c.id === id)!;
+  return creators.find((c) => c.id === id) ?? null;
 }
