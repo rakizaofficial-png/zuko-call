@@ -144,6 +144,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEngagement(getEngagement());
   }, []);
 
+  const syncWallet = useCallback(async () => {
+    const wallet = await fetchOrCreateWallet();
+    setUserId(wallet.userId);
+    setDisplayName(wallet.displayName || ensureLocalProfile().displayName);
+    setAvatarUrl(wallet.avatarUrl || ensureLocalProfile().avatarUrl);
+    setCoins(wallet.coinBalance);
+    setXp(wallet.xp);
+    setPremium(wallet.isPremium);
+    return wallet;
+  }, []);
+
   const creditReward = useCallback(
     async (amount: number, label: string) => {
       if (amount <= 0) return;
@@ -156,26 +167,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         triggerCoinBurst(amount);
         pushToast(label);
       } catch {
-        setCoins((c) => c + amount);
-        appendLocalHistory(amount, label, "credit");
-        refreshEngagement();
-        triggerCoinBurst(amount);
-        pushToast(label);
+        pushToast("Reward sync failed — try again");
+        try {
+          await syncWallet();
+        } catch {
+          /* ignore */
+        }
       }
     },
-    [pushToast, refreshEngagement, triggerCoinBurst],
+    [pushToast, refreshEngagement, syncWallet, triggerCoinBurst],
   );
-
-  const syncWallet = useCallback(async () => {
-    const wallet = await fetchOrCreateWallet();
-    setUserId(wallet.userId);
-    setDisplayName(wallet.displayName || ensureLocalProfile().displayName);
-    setAvatarUrl(wallet.avatarUrl || ensureLocalProfile().avatarUrl);
-    setCoins(wallet.coinBalance);
-    setXp(wallet.xp);
-    setPremium(wallet.isPremium);
-    return wallet;
-  }, []);
 
   const updateDisplayName = useCallback(
     async (name: string) => {
@@ -426,7 +427,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCoins(wallet.coinBalance);
         setXp(wallet.xp);
       } catch {
-        setPremium(true);
+        pushToast("VIP activation failed — check connection");
+        return;
       }
       if (welcomeCoins > 0) {
         await creditReward(welcomeCoins, `VIP · +${welcomeCoins} welcome coins`);

@@ -242,6 +242,33 @@ export const engagingLines = [
   "VIP fans talk longer for less.",
 ];
 
-export function getCreator(id: string) {
-  return creators.find((c) => c.id === id) ?? null;
+export function getCreator(id: string): Creator | undefined {
+  return creators.find((c) => c.id === id);
+}
+
+/** Safe host for live room — catalog or API-shaped fallback */
+export function resolveLiveCreator(
+  id: string,
+  fallback?: Partial<Creator> & { name?: string; image?: string },
+): Creator {
+  const found = getCreator(id);
+  if (found) return found;
+  return {
+    id,
+    name: fallback?.name || "Host",
+    country: fallback?.country || "Global",
+    flag: fallback?.flag || "🌐",
+    age: fallback?.age || 22,
+    bio: fallback?.bio || "Live now on Luma",
+    tags: fallback?.tags || ["Live"],
+    online: true,
+    live: true,
+    viewers: fallback?.viewers || 100,
+    callRate: fallback?.callRate || 80,
+    rating: fallback?.rating || 4.8,
+    image:
+      fallback?.image ||
+      `https://i.pravatar.cc/800?u=${encodeURIComponent(id)}`,
+    gradient: "from-coral/40 to-cyan/20",
+  };
 }

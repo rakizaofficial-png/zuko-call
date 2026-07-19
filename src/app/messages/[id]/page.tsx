@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, Gift, Send, Video } from "lucide-react";
-import { creators, getCreator, threads } from "@/lib/data";
+import { getCreator, resolveLiveCreator, threads } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
 import { VipChatBubble } from "@/components/VipChatBubble";
@@ -23,8 +23,8 @@ export default function ChatThreadPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const thread = threads.find((t) => t.id === id) ?? threads[0];
-  const creator = getCreator(thread.creatorId) ?? creators[0];
+  const thread = threads.find((t) => t.id === id) ?? threads[0]!;
+  const creator = resolveLiveCreator(thread.creatorId);
   const { spend, vipTier, triggerEntranceBlast } = useApp();
   const [messages, setMessages] = useState(starter);
   const [text, setText] = useState("");
