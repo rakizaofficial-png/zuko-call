@@ -1,15 +1,20 @@
 "use client";
 
 /**
- * Direct messages (user ↔ host) persisted in localStorage.
- * Opens from profile cards / host profile; shown in /messages.
+ * Direct messages (user ↔ host).
+ * Local cache + CoinCall API so hosts see fan messages in Chat.
  */
+
+import { requireApiBase } from "@/config/apiConfig";
+import { getDeviceUserId } from "@/lib/walletApi";
+import { getRealtimeClient } from "@/lib/realtime/websocket";
 
 export type DmMessage = {
   id: string;
   from: "me" | "them";
   text: string;
   at: number;
+  fromId?: string;
 };
 
 export type DmThread = {
@@ -41,7 +46,7 @@ function writeJson(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    /* ignore quota */
+    /* ignore */
   }
 }
 
@@ -60,6 +65,18 @@ export function getDmMessages(threadId: string): DmMessage[] {
   return all[threadId] || [];
 }
 
+function cacheThread(t: DmThread) {
+  const threads = listDmThreads().filter((x) => x.id !== t.id);
+  threads.unshift(t);
+  writeJson(THREADS_KEY, threads);
+}
+
+function cacheMessages(threadId: string, messages: DmMessage[]) {
+  const all = readJson<Record<string, DmMessage[]>>(MSGS_KEY, {});
+  all[threadId] = messages;
+  writeJson(MSGS_KEY, all);
+}
+
 export function openDmWithHost(input: {
   hostId: string;
   hostName: string;
@@ -72,7 +89,7 @@ export function openDmWithHost(input: {
   const now = Date.now();
 
   if (!existing) {
-    threads.unshift({
+    cacheThread({
       id,
       hostId: input.hostId,
       hostName: input.hostName,
@@ -81,19 +98,16 @@ export function openDmWithHost(input: {
       updatedAt: now,
       unread: 0,
     });
-    writeJson(THREADS_KEY, threads);
-
     const msgs = getDmMessages(id);
     if (msgs.length === 0) {
-      const welcome: DmMessage = {
-        id: `m_${now}`,
-        from: "them",
-        text: `Hey! It's ${input.hostName} ✨ Text me anytime.`,
-        at: now,
-      };
-      const all = readJson<Record<string, DmMessage[]>>(MSGS_KEY, {});
-      all[id] = [welcome];
-      writeJson(MSGS_KEY, all);
+      cacheMessages(id, [
+        {
+          id: `m_${now}`,
+          from: "them",
+          text: `Hey! It's ${input.hostName} ✨ Text me anytime.`,
+          at: now,
+        },
+      ]);
     }
   } else {
     existing.hostName = input.hostName;
@@ -105,35 +119,104 @@ export function openDmWithHost(input: {
   return id;
 }
 
-export function sendDmMessage(
+export async function syncDmFromApi(hostId: string): Promise<DmMessage[]> {
+  const userId = getDeviceUserId();
+  const threadId = threadIdForHost(hostId);
+  try {
+    const res = await fetch(
+      `${requireApiBase()}/dm/messages?a=${encodeURIComponent(userId)}&b=${encodeURIComponent(hostId)}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return getDmMessages(threadId);
+    const data = (await res.json()) as {
+      messages?: Array<{
+        id: string;
+        fromId: string;
+        toId: string;
+        text: string;
+        createdAt: number;
+      }>;
+    };
+    const mapped: DmMessage[] = (data.messages || []).map((m) => ({
+      id: m.id,
+      from: m.fromId === userId ? ("me" as const) : ("them" as const),
+      text: m.text,
+      at: m.createdAt,
+      fromId: m.fromId,
+    }));
+    if (mapped.length) cacheMessages(threadId, mapped);
+    return mapped.length ? mapped : getDmMessages(threadId);
+  } catch {
+    return getDmMessages(threadId);
+  }
+}
+
+export async function sendDmMessage(
   threadId: string,
   text: string,
-): { mine: DmMessage; reply?: DmMessage } {
+  meta?: { hostId: string; hostName: string; hostAvatar?: string },
+): Promise<{ mine: DmMessage }> {
   const trimmed = text.trim();
   if (!trimmed) throw new Error("Empty message");
 
+  const userId = getDeviceUserId();
+  const hostId = meta?.hostId || threadId.replace(/^dm_/, "");
   const now = Date.now();
-  const mine: DmMessage = {
-    id: `m_${now}`,
+  const optimistic: DmMessage = {
+    id: `local_${now}`,
     from: "me",
     text: trimmed,
     at: now,
+    fromId: userId,
   };
 
-  const all = readJson<Record<string, DmMessage[]>>(MSGS_KEY, {});
-  const list = all[threadId] || [];
-  list.push(mine);
-  all[threadId] = list;
-  writeJson(MSGS_KEY, all);
+  const local = [...getDmMessages(threadId), optimistic];
+  cacheMessages(threadId, local);
+  cacheThread({
+    id: threadId,
+    hostId,
+    hostName: meta?.hostName || "Host",
+    hostAvatar: meta?.hostAvatar || "",
+    lastMessage: trimmed,
+    updatedAt: now,
+    unread: 0,
+  });
 
-  const threads = listDmThreads();
-  const t = threads.find((x) => x.id === threadId);
-  if (t) {
-    t.lastMessage = trimmed;
-    t.updatedAt = now;
-    t.unread = 0;
-    writeJson(THREADS_KEY, threads);
-  }
+  const res = await fetch(`${requireApiBase()}/dm/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fromId: userId,
+      toId: hostId,
+      text: trimmed,
+      fromName: "Luma Fan",
+      fromRole: "user",
+      peerName: meta?.hostName || "Host",
+      peerAvatar: meta?.hostAvatar,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Send failed");
+
+  const saved = data.message as {
+    id: string;
+    fromId: string;
+    text: string;
+    createdAt: number;
+  };
+  const mine: DmMessage = {
+    id: saved.id,
+    from: "me",
+    text: saved.text,
+    at: saved.createdAt,
+    fromId: saved.fromId,
+  };
+  const withoutLocal = getDmMessages(threadId).filter((m) => m.id !== optimistic.id);
+  if (!withoutLocal.some((m) => m.id === mine.id)) withoutLocal.push(mine);
+  cacheMessages(threadId, withoutLocal);
+
+  // Realtime fan-out is handled by the API (broadcastWs + pushToHost).
+  // Do not also emit dm:send here — that would duplicate the message.
 
   return { mine };
 }
@@ -146,12 +229,7 @@ export function appendDmReply(threadId: string, text: string): DmMessage {
     text,
     at: now,
   };
-  const all = readJson<Record<string, DmMessage[]>>(MSGS_KEY, {});
-  const list = all[threadId] || [];
-  list.push(reply);
-  all[threadId] = list;
-  writeJson(MSGS_KEY, all);
-
+  cacheMessages(threadId, [...getDmMessages(threadId), reply]);
   const threads = listDmThreads();
   const t = threads.find((x) => x.id === threadId);
   if (t) {
@@ -170,4 +248,28 @@ export function markDmRead(threadId: string) {
     t.unread = 0;
     writeJson(THREADS_KEY, threads);
   }
+}
+
+export function listenDmRealtime(
+  hostId: string,
+  userId: string,
+  onMessage: (msg: DmMessage) => void,
+): () => void {
+  const rt = getRealtimeClient(userId);
+  rt.connect();
+  return rt.subscribe((ev) => {
+    if ((ev as { type: string }).type !== "dm:message") return;
+    const p = (ev as { payload?: { message?: { id: string; fromId: string; toId: string; text: string; createdAt: number } } }).payload;
+    const m = p?.message;
+    if (!m) return;
+    const ids = [m.fromId, m.toId];
+    if (!ids.includes(userId) || !ids.includes(hostId)) return;
+    onMessage({
+      id: m.id,
+      from: m.fromId === userId ? "me" : "them",
+      text: m.text,
+      at: m.createdAt,
+      fromId: m.fromId,
+    });
+  });
 }

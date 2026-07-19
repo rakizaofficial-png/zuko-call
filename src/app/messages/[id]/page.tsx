@@ -1,34 +1,27 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft, Gift, Send, Video } from "lucide-react";
-import { getCreator, resolveLiveCreator, threads } from "@/lib/data";
+import { resolveLiveCreator, threads } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
 import { VipChatBubble } from "@/components/VipChatBubble";
 import { WalletDiamond } from "@/components/WalletDiamond";
 import {
-  appendDmReply,
-  getDmMessages,
   listDmThreads,
+  listenDmRealtime,
   markDmRead,
   openDmWithHost,
   sendDmMessage,
+  syncDmFromApi,
   type DmMessage,
 } from "@/lib/dmStore";
 import { fetchLiveHosts } from "@/lib/api";
 import { hostFromId } from "@/lib/discoverHosts";
-
-const REPLIES = [
-  "Haha love that — talk soon? 💫",
-  "You're sweet ✨",
-  "Want a private call later?",
-  "Tell me more 👀",
-  "I'm free now if you want to call!",
-];
+import { getDeviceUserId } from "@/lib/walletApi";
 
 export default function ChatThreadPage({
   params,
@@ -36,10 +29,11 @@ export default function ChatThreadPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { vipTier, triggerEntranceBlast } = useApp();
+  const { vipTier, triggerEntranceBlast, pushToast } = useApp();
   const [messages, setMessages] = useState<DmMessage[]>([]);
   const [text, setText] = useState("");
   const [giftOpen, setGiftOpen] = useState(false);
+  const [sending, setSending] = useState(false);
   const [hostMeta, setHostMeta] = useState({
     id: "",
     name: "Host",
@@ -47,29 +41,27 @@ export default function ChatThreadPage({
     online: true,
   });
   const bottomRef = useRef<HTMLDivElement>(null);
+  const userId = useMemo(() => getDeviceUserId(), []);
 
   useEffect(() => {
     let cancelled = false;
+    let offRt: (() => void) | undefined;
+    let poll: ReturnType<typeof setInterval> | undefined;
 
     (async () => {
-      // DM thread: dm_{hostId}
+      let hostId = id.startsWith("dm_") ? id.slice(3) : "";
+      let name = "Host";
+      let image = `https://i.pravatar.cc/150?u=${encodeURIComponent(hostId || id)}`;
+      let online = true;
+
       if (id.startsWith("dm_")) {
-        const hostId = id.slice(3);
         markDmRead(id);
-        let name = "Host";
-        let image = `https://i.pravatar.cc/150?u=${encodeURIComponent(hostId)}`;
-        let online = true;
         try {
           const live = await fetchLiveHosts();
           const h = hostFromId(hostId, live);
           name = h.name;
           image = h.avatarUrl;
           online = h.online || h.live;
-          openDmWithHost({
-            hostId,
-            hostName: name,
-            hostAvatar: image,
-          });
         } catch {
           const t = listDmThreads().find((x) => x.id === id);
           if (t) {
@@ -77,84 +69,78 @@ export default function ChatThreadPage({
             image = t.hostAvatar;
           }
         }
-        if (cancelled) return;
-        setHostMeta({ id: hostId, name, image, online });
-        setMessages(getDmMessages(id));
-        return;
+        openDmWithHost({ hostId, hostName: name, hostAvatar: image });
+      } else {
+        const thread = threads.find((t) => t.id === id) ?? threads[0]!;
+        const creator = resolveLiveCreator(thread.creatorId);
+        hostId = creator.id;
+        name = creator.name;
+        image = creator.image;
+        online = creator.online;
+        openDmWithHost({
+          hostId,
+          hostName: name,
+          hostAvatar: image,
+        });
       }
 
-      // Legacy catalog thread
-      const thread = threads.find((t) => t.id === id) ?? threads[0]!;
-      const creator = resolveLiveCreator(thread.creatorId);
-      if (cancelled) return;
-      setHostMeta({
-        id: creator.id,
-        name: creator.name,
-        image: creator.image,
-        online: creator.online,
+      if (cancelled || !hostId) return;
+      setHostMeta({ id: hostId, name, image, online });
+
+      const synced = await syncDmFromApi(hostId);
+      if (!cancelled) setMessages(synced);
+
+      offRt = listenDmRealtime(hostId, userId, (msg) => {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
       });
-      // Migrate into DM store so send works the same
-      const tid = openDmWithHost({
-        hostId: creator.id,
-        hostName: creator.name,
-        hostAvatar: creator.image,
-      });
-      const existing = getDmMessages(tid);
-      if (existing.length === 0) {
-        setMessages([
-          {
-            id: "s1",
-            from: "them",
-            text: "Hey you ✨ glad you wrote",
-            at: Date.now() - 60000,
-          },
-          {
-            id: "s2",
-            from: "me",
-            text: "Your energy on live was unreal",
-            at: Date.now() - 30000,
-          },
-          {
-            id: "s3",
-            from: "them",
-            text: "Aww thank you! Want a private call later?",
-            at: Date.now() - 10000,
-          },
-        ]);
-      } else {
-        setMessages(existing);
-      }
+      poll = setInterval(() => {
+        void syncDmFromApi(hostId).then((rows) => {
+          if (!cancelled) setMessages(rows);
+        });
+      }, 4000);
     })();
 
     return () => {
       cancelled = true;
+      offRt?.();
+      if (poll) clearInterval(poll);
     };
-  }, [id]);
+  }, [id, userId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  const threadKey = id.startsWith("dm_")
-    ? id
-    : `dm_${hostMeta.id || getCreator(threads[0]?.creatorId || "")?.id || "host"}`;
-
-  const send = () => {
-    if (!text.trim() || !hostMeta.id) return;
+  const send = async () => {
+    if (!text.trim() || !hostMeta.id || sending) return;
     if (vipTier === "diamond") triggerEntranceBlast();
+    setSending(true);
     const tid = openDmWithHost({
       hostId: hostMeta.id,
       hostName: hostMeta.name,
       hostAvatar: hostMeta.image,
     });
-    const { mine } = sendDmMessage(tid, text);
-    setMessages((m) => [...m, mine]);
+    const outgoing = text.trim();
     setText("");
-    const replyText = REPLIES[Math.floor(Math.random() * REPLIES.length)]!;
-    setTimeout(() => {
-      const reply = appendDmReply(tid, replyText);
-      setMessages((m) => [...m, reply]);
-    }, 900);
+    try {
+      const { mine } = await sendDmMessage(tid, outgoing, {
+        hostId: hostMeta.id,
+        hostName: hostMeta.name,
+        hostAvatar: hostMeta.image,
+      });
+      setMessages((m) => {
+        if (m.some((x) => x.id === mine.id)) return m;
+        return [...m.filter((x) => !x.id.startsWith("local_")), mine];
+      });
+    } catch (e) {
+      setText(outgoing);
+      pushToast?.(e instanceof Error ? e.message : "Could not send");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -224,21 +210,23 @@ export default function ChatThreadPage({
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
+            onKeyDown={(e) => e.key === "Enter" && void send()}
             placeholder="Write a message…"
-            className="flex-1 rounded-full border border-white/10 bg-[#06040b] px-4 py-2.5 text-sm text-sand outline-none placeholder:text-white/35"
+            disabled={sending}
+            className="flex-1 rounded-full border border-white/10 bg-[#06040b] px-4 py-2.5 text-sm text-sand outline-none placeholder:text-white/35 disabled:opacity-60"
           />
           <button
             type="button"
-            onClick={send}
-            className="rounded-full bg-[#ff9f1a] p-2.5 text-black"
+            onClick={() => void send()}
+            disabled={sending || !text.trim()}
+            className="rounded-full bg-[#ff9f1a] p-2.5 text-black disabled:opacity-40"
             aria-label="Send"
           >
             <Send className="h-4 w-4" />
           </button>
         </div>
         <p className="mt-1.5 text-center text-[10px] text-white/35">
-          Chat · {threadKey.replace("dm_", "")}
+          Host sees this in CoinCall → Chat
         </p>
       </div>
 

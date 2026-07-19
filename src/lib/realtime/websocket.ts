@@ -65,6 +65,25 @@ export type RealtimeEvent =
       payload: { id: string };
     }
   | {
+      type: "dm:message";
+      payload: {
+        chatId?: string;
+        message?: {
+          id: string;
+          fromId: string;
+          toId: string;
+          text: string;
+          createdAt: number;
+          fromName?: string;
+        };
+        thread?: {
+          userId?: string;
+          hostId?: string;
+          lastMessage?: string;
+        };
+      };
+    }
+  | {
       type: "party:message";
       payload: { roomId: string; userId: string; text: string; at: number };
     }
