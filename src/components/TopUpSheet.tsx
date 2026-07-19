@@ -15,11 +15,13 @@ export function TopUpSheet({
   onClose,
   graceLeft,
   minuteRate,
+  warningMessage,
 }: {
   open: boolean;
   onClose: () => void;
   graceLeft?: number;
   minuteRate?: number;
+  warningMessage?: string;
 }) {
   const { userId, pushToast, syncWallet } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
@@ -75,13 +77,18 @@ export function TopUpSheet({
                   <Zap className="h-3.5 w-3.5" /> Live wallet recharge
                 </p>
                 <h3 className="mt-1 font-display text-xl font-extrabold text-sand">
-                  Google Play / App Store
+                  {warningMessage
+                    ? "Balance running low"
+                    : "Google Play / App Store"}
                 </h3>
                 <p className="mt-1 text-xs text-cyan/80">
-                  {minuteRate
-                    ? `Below 1-minute rate (${minuteRate} coins)`
-                    : "Server-verified IAP credit"}
-                  {graceLeft != null ? ` · ${graceLeft}s grace` : ""}
+                  {warningMessage ||
+                    (minuteRate
+                      ? `Below 1-minute rate (${minuteRate} coins)`
+                      : "Server-verified IAP credit")}
+                  {!warningMessage && graceLeft != null
+                    ? ` · ${graceLeft}s grace`
+                    : ""}
                 </p>
               </div>
               <button

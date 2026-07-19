@@ -13,7 +13,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gem, MoreHorizontal, Plus, Send, X } from "lucide-react";
+import { Gem, Plus, Send, X } from "lucide-react";
 import { gifts } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
@@ -390,23 +390,23 @@ export default function HostOnlyLiveRoomPage({
       <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/55 via-transparent to-black/85" />
 
       <div className="relative z-10 flex min-h-dvh flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]">
-        {/* Header */}
+        {/* Header — floating glass */}
         <div className="pointer-events-auto flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2 rounded-full bg-black/45 py-1 pl-1 pr-2 backdrop-blur-md">
+          <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/20 bg-white/12 py-1 pl-1 pr-2 shadow-lg backdrop-blur-xl">
             <Image
               src={avatar}
               alt=""
               width={36}
               height={36}
-              className="h-9 w-9 rounded-full object-cover"
+              className="h-9 w-9 rounded-full object-cover ring-1 ring-white/30"
               unoptimized
             />
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold leading-tight text-white">
+              <p className="truncate text-sm font-bold leading-tight text-white drop-shadow">
                 {room?.hostName || "Host"}
               </p>
-              <p className="text-[10px] text-white/70">
-                {status === "live" ? "LIVE" : status.toUpperCase()}
+              <p className="text-[10px] font-semibold text-rose-300">
+                {status === "live" ? "● LIVE" : status.toUpperCase()}
               </p>
             </div>
             <button
@@ -424,7 +424,7 @@ export default function HostOnlyLiveRoomPage({
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-full bg-black/45 px-2 py-1 backdrop-blur-md">
+            <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2 py-1 shadow-lg backdrop-blur-xl">
               <span className="flex -space-x-1.5">
                 {[0, 1, 2].map((i) => (
                   <span
@@ -444,7 +444,7 @@ export default function HostOnlyLiveRoomPage({
             <button
               type="button"
               onClick={() => router.push("/live")}
-              className="rounded-full bg-black/45 p-2 backdrop-blur-md"
+              className="rounded-full border border-white/20 bg-white/12 p-2 shadow-lg backdrop-blur-xl"
               aria-label="Close"
             >
               <X className="h-5 w-5 text-white" />
@@ -452,41 +452,48 @@ export default function HostOnlyLiveRoomPage({
           </div>
         </div>
 
-        {/* Diamonds received (host counter visible to fans) */}
         <div className="pointer-events-none mt-3 flex justify-start">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 backdrop-blur-md">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/15 px-2.5 py-1 backdrop-blur-xl">
             <Gem className="h-3.5 w-3.5 text-amber-300" />
-            <span className="text-[11px] font-bold tabular-nums text-amber-200">
+            <span className="text-[11px] font-bold tabular-nums text-amber-100">
               {(room?.giftCoins || 0).toLocaleString()} diamonds
             </span>
           </div>
         </div>
 
-        <div className="mt-auto space-y-2">
-          {/* Chat overlay */}
-          <div className="pointer-events-none max-h-48 space-y-1.5 overflow-y-auto pr-12 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-auto">
+          {/* Chat overlay — bottom left */}
+          <div className="pointer-events-none mb-3 max-h-[36vh] w-[min(78%,300px)] space-y-1.5 overflow-y-auto pr-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {comments.length === 0 && (
-              <p className="text-xs text-white/50">Say hi — chat appears here</p>
+              <p className="text-xs text-white/55 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                Say hi — chat floats here
+              </p>
             )}
             {comments.map((m) =>
               m.kind === "gift" ? (
                 <div
                   key={m.id}
-                  className="inline-flex max-w-[85%] items-center gap-1.5 rounded-2xl bg-[#7b2cff]/75 px-2.5 py-1 text-xs text-white backdrop-blur-sm"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-2xl border border-violet-300/30 bg-[#7b2cff]/55 px-2.5 py-1 text-xs text-white shadow-lg backdrop-blur-md"
                 >
                   <span>{m.giftEmoji || "🎁"}</span>
                   <span className="font-bold">{m.userName}</span>
                   <span className="opacity-90">{m.text}</span>
                 </div>
               ) : m.kind === "join" ? (
-                <p key={m.id} className="text-xs text-white/75">
+                <p
+                  key={m.id}
+                  className="text-xs text-white/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]"
+                >
                   <span className={`font-bold ${nameColor(m.userName)}`}>
                     {m.userName}
                   </span>{" "}
                   joined
                 </p>
               ) : (
-                <p key={m.id} className="text-sm text-white/95 drop-shadow">
+                <p
+                  key={m.id}
+                  className="text-[13px] leading-snug text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
+                >
                   <span className={`font-bold ${nameColor(m.userName)}`}>
                     {m.userName}
                   </span>{" "}
@@ -497,73 +504,62 @@ export default function HostOnlyLiveRoomPage({
             <div ref={chatEndRef} />
           </div>
 
-          {/* Quick gift row */}
-          <div className="pointer-events-auto -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {gifts.slice(0, 6).map((g) => (
+          {/* Composer + floating circular actions */}
+          <div className="pointer-events-auto flex items-end gap-2">
+            <form
+              onSubmit={onSendChat}
+              className="flex min-w-0 flex-1 items-center gap-2"
+            >
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                placeholder="Say something…"
+                maxLength={200}
+                enterKeyHint="send"
+                autoComplete="off"
+                disabled={sendingChat || !chatEnabled}
+                className="min-w-0 flex-1 rounded-full border border-white/20 bg-white/12 px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/45 shadow-lg backdrop-blur-xl disabled:opacity-60"
+              />
               <button
-                key={g.id}
-                type="button"
-                onClick={() => void sendQuickGift(g.id)}
-                className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl bg-black/35 px-2.5 py-1.5 backdrop-blur-md"
+                type="submit"
+                disabled={sendingChat || !draft.trim() || !chatEnabled}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/12 text-white backdrop-blur-xl disabled:opacity-40"
+                aria-label="Send message"
               >
-                <span className="text-xl leading-none">{g.emoji}</span>
-                <span className="text-[10px] font-semibold text-amber-200">
-                  {g.coins}
-                </span>
+                <Send className="h-4 w-4" />
               </button>
-            ))}
+            </form>
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => setGiftOpen(true)}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-rose-400 to-fuchsia-500 text-lg shadow-[0_8px_28px_rgba(244,63,94,0.45)]"
+                aria-label="Gifts"
+              >
+                🎁
+              </button>
+              <div className="-mx-1 flex max-w-[3.25rem] flex-col gap-1.5 overflow-hidden">
+                {gifts.slice(0, 3).map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => void sendQuickGift(g.id)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/12 text-base backdrop-blur-xl"
+                    title={`${g.name} · ${g.coins}`}
+                  >
+                    {g.emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-
-          {/* Bottom bar */}
-          <form
-            onSubmit={onSendChat}
-            className="pointer-events-auto flex items-center gap-2"
-          >
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  const form = e.currentTarget.form;
-                  form?.requestSubmit();
-                }
-              }}
-              placeholder="Type something sweet..."
-              maxLength={200}
-              enterKeyHint="send"
-              autoComplete="off"
-              disabled={sendingChat || !chatEnabled}
-              className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/45 px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/45 backdrop-blur-md disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={sendingChat || !draft.trim() || !chatEnabled}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#ff2d55] disabled:opacity-40"
-              aria-label="Send message"
-            >
-              <Send className="h-4 w-4 text-white" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setGiftOpen(true)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-rose-500 shadow-lg shadow-rose-500/30"
-              aria-label="Gifts"
-            >
-              <span className="text-lg">🎁</span>
-            </button>
-            <button
-              type="button"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/45 backdrop-blur-md"
-              aria-label="More"
-            >
-              <MoreHorizontal className="h-5 w-5 text-white" />
-            </button>
-          </form>
-
-          <p className="pointer-events-none text-center text-[10px] text-white/45">
-            {coins.toLocaleString()} coins · host-only live
-          </p>
         </div>
       </div>
 

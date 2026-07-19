@@ -8,11 +8,13 @@ export function LowBalanceModal({
   graceLeft,
   onDismiss,
   minuteRate,
+  warningMessage,
 }: {
   open: boolean;
   graceLeft: number;
   onDismiss?: () => void;
   minuteRate?: number;
+  warningMessage?: string;
 }) {
   return (
     <TopUpSheet
@@ -20,6 +22,7 @@ export function LowBalanceModal({
       onClose={onDismiss ?? (() => undefined)}
       graceLeft={graceLeft}
       minuteRate={minuteRate}
+      warningMessage={warningMessage}
     />
   );
 }

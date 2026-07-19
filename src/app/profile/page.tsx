@@ -9,6 +9,7 @@ import {
   Flame,
   History,
   Pencil,
+  Phone,
   RefreshCw,
   Sparkles,
   Store,
@@ -20,6 +21,11 @@ import { LuckySpinModal } from "@/components/engagement/LuckySpinModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { purchaseCoins } from "@/lib/payments/iap";
 import type { IapProduct } from "@/lib/payments/iapCatalog";
+import {
+  fetchUserCallHistory,
+  formatCallDuration,
+  type CallHistoryRow,
+} from "@/lib/callHistoryApi";
 import {
   fetchCoinCatalog,
   fetchWalletHistory,
@@ -50,11 +56,12 @@ export default function ProfilePage() {
   const [selected, setSelected] = useState<string>("");
   const [buying, setBuying] = useState(false);
   const [history, setHistory] = useState<WalletLedgerEntry[]>([]);
+  const [callHistory, setCallHistory] = useState<CallHistoryRow[]>([]);
   const [spinOpen, setSpinOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [historyTab, setHistoryTab] = useState<"calls" | "coins">("calls");
 
   const checkReward = nextCheckInReward(engagement);
   const spinsLeft = spinsRemaining(engagement);
@@ -75,6 +82,13 @@ export default function ProfilePage() {
       else setHistory(engagement.coinHistory);
     });
   }, [engagement.coinHistory, coins]);
+
+  useEffect(() => {
+    if (!ready || !userId) return;
+    void fetchUserCallHistory(40)
+      .then((data) => setCallHistory(data.calls))
+      .catch(() => setCallHistory([]));
+  }, [ready, userId, coins]);
 
   const pack = products.find((p) => p.productId === selected) || products[0];
 
@@ -350,20 +364,69 @@ export default function ProfilePage() {
 
       {/* History */}
       <section className="px-4 pb-10">
-        <button
-          type="button"
-          onClick={() => setShowHistory((v) => !v)}
-          className="mb-3 flex w-full items-center justify-between"
-        >
-          <span className="flex items-center gap-2 font-display text-sm font-bold">
-            <History className="h-4 w-4 text-muted" />
+        <div className="mb-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setHistoryTab("calls")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold ${
+              historyTab === "calls"
+                ? "bg-coral text-white"
+                : "border border-line bg-ink-2/50 text-muted"
+            }`}
+          >
+            <Phone className="h-3.5 w-3.5" />
+            Call History
+          </button>
+          <button
+            type="button"
+            onClick={() => setHistoryTab("coins")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold ${
+              historyTab === "coins"
+                ? "bg-coral text-white"
+                : "border border-line bg-ink-2/50 text-muted"
+            }`}
+          >
+            <History className="h-3.5 w-3.5" />
             Coin history
-          </span>
-          <ChevronRight
-            className={`h-4 w-4 text-muted transition ${showHistory ? "rotate-90" : ""}`}
-          />
-        </button>
-        {showHistory ? (
+          </button>
+        </div>
+
+        {historyTab === "calls" ? (
+          <ul className="space-y-2">
+            {callHistory.map((c) => {
+              const when = new Date(c.startedAt || c.endedAt);
+              return (
+                <li
+                  key={c.id}
+                  className="rounded-xl border border-line bg-ink-2/40 px-3.5 py-2.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {c.hostName || "Host"}
+                      </p>
+                      <p className="text-[10px] text-muted">
+                        {when.toLocaleDateString()} · {when.toLocaleTimeString()}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-muted">
+                        Duration {formatCallDuration(c.durationSec)} ·{" "}
+                        {c.billedMinutes} min billed
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-display text-sm font-extrabold text-coral">
+                      −{c.coinsSpent}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+            {!callHistory.length ? (
+              <p className="py-6 text-center text-xs text-muted">
+                No calls yet
+              </p>
+            ) : null}
+          </ul>
+        ) : (
           <ul className="space-y-2">
             {(history.length ? history : engagement.coinHistory)
               .slice(0, 12)
@@ -394,7 +457,7 @@ export default function ProfilePage() {
               </p>
             ) : null}
           </ul>
-        ) : null}
+        )}
       </section>
 
       <LuckySpinModal open={spinOpen} onClose={() => setSpinOpen(false)} />

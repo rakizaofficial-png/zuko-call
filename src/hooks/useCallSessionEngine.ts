@@ -160,6 +160,14 @@ export function useCallSessionEngine(opts: {
           if (cancelledRef.current) return;
           setLiveHost(host);
 
+          // Pre-check: block empty / insufficient wallets before ringing
+          const { fetchOrCreateWallet } = await import("@/lib/walletApi");
+          const wallet = await fetchOrCreateWallet();
+          const need = Math.max(1, Math.floor(Number(host.ratePerMinute) || 80));
+          if (wallet.coinBalance < need) {
+            throw new Error("Insufficient balance, please recharge");
+          }
+
           setState("RINGING");
           setStatusText("Connecting to Host…");
           startRingingTone();
@@ -218,6 +226,17 @@ export function useCallSessionEngine(opts: {
         // --- AI / PRERECORDED FALLBACK PATH ---
         const ai = decision.aiHost;
         if (!ai) throw new Error("AI host catalog empty");
+
+        const { fetchOrCreateWallet } = await import("@/lib/walletApi");
+        const wallet = await fetchOrCreateWallet();
+        const aiRate = Math.max(
+          1,
+          Math.floor(Number(ai.cost_per_minute) || 80),
+        );
+        if (wallet.coinBalance < aiRate) {
+          throw new Error("Insufficient balance, please recharge");
+        }
+
         setTransport("ai_prerecorded");
         setAiHost(ai);
         setLiveHost(null);
