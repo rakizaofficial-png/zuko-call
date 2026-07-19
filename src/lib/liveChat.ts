@@ -2,8 +2,8 @@
 
 /**
  * Live chat for Host-Only streams.
- * Prefers Firebase RTDB (same paths as CoinCall host app).
- * Falls back to CoinCall REST + WebSocket when Firebase is not configured.
+ * Uses CoinCall REST + WebSocket as the reliable path.
+ * Also mirrors to Firebase RTDB when configured (same paths as host app).
  */
 
 import {
@@ -26,27 +26,6 @@ export function listenLiveComments(
   userId: string,
   onComments: (items: LiveComment[]) => void,
 ): () => void {
-  const db = getFirebaseDb();
-  if (isFirebaseReady() && db) {
-    const unsub: Unsubscribe = onValue(
-      ref(db, `liveRooms/${roomId}/comments`),
-      (snap) => {
-        if (!snap.exists()) {
-          onComments([]);
-          return;
-        }
-        const val = snap.val() as Record<string, Omit<LiveComment, "id">>;
-        onComments(
-          Object.entries(val)
-            .map(([id, row]) => ({ id, ...row }))
-            .sort((a, b) => a.createdAt - b.createdAt)
-            .slice(-80),
-        );
-      },
-    );
-    return () => unsub();
-  }
-
   let dead = false;
   const merge = new Map<string, LiveComment>();
 
@@ -57,14 +36,24 @@ export function listenLiveComments(
     );
   };
 
-  const load = async () => {
-    const rows = await fetchLiveComments(roomId);
-    for (const c of rows) merge.set(c.id, c);
+  const ingest = (rows: LiveComment[]) => {
+    for (const c of rows) {
+      if (c?.id) merge.set(c.id, c);
+    }
     emit();
   };
 
+  const load = async () => {
+    try {
+      const rows = await fetchLiveComments(roomId);
+      ingest(rows);
+    } catch {
+      /* keep last */
+    }
+  };
+
   void load();
-  const poll = setInterval(() => void load(), 4000);
+  const poll = setInterval(() => void load(), 2500);
 
   const rt = getRealtimeClient(userId);
   rt.connect();
@@ -74,40 +63,91 @@ export function listenLiveComments(
       roomId?: string;
       comment?: LiveComment;
     };
-    if (payload.roomId !== roomId || !payload.comment) return;
+    if (!payload.comment) return;
+    if (
+      payload.roomId &&
+      payload.roomId !== roomId &&
+      payload.roomId !== `live_${roomId}` &&
+      !roomId.endsWith(payload.roomId)
+    ) {
+      // still accept if hostId matches room suffix
+      const hostPart = roomId.replace(/^live_/, "");
+      if (payload.roomId !== `live_${hostPart}`) return;
+    }
     merge.set(payload.comment.id, payload.comment);
     emit();
   });
+
+  let unsubFb: Unsubscribe | undefined;
+  const db = getFirebaseDb();
+  if (isFirebaseReady() && db) {
+    unsubFb = onValue(ref(db, `liveRooms/${roomId}/comments`), (snap) => {
+      if (!snap.exists()) return;
+      const val = snap.val() as Record<string, Omit<LiveComment, "id">>;
+      ingest(
+        Object.entries(val).map(([id, row]) => ({ id, ...row })),
+      );
+    });
+  }
 
   return () => {
     dead = true;
     clearInterval(poll);
     off();
+    unsubFb?.();
+  };
+}
+
+/** Optimistically show a pending comment in the UI */
+export function makeOptimisticComment(input: {
+  userId: string;
+  userName: string;
+  text: string;
+}): LiveComment {
+  return {
+    id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    userId: input.userId,
+    userName: input.userName,
+    text: input.text,
+    createdAt: Date.now(),
+    kind: "comment",
   };
 }
 
 export async function sendLiveComment(input: {
   roomId: string;
+  hostId?: string;
   userId: string;
   userName: string;
   text: string;
-}) {
-  const db = getFirebaseDb();
-  if (isFirebaseReady() && db) {
-    const r = push(ref(db, `liveRooms/${input.roomId}/comments`));
-    const row = {
-      userId: input.userId,
-      userName: input.userName,
-      text: input.text,
-      createdAt: Date.now(),
-      kind: "comment" as const,
-    };
-    await set(r, row);
-    // Mirror to API so hosts without FB still see it via WS
-    void postLiveComment(input).catch(() => undefined);
-    return;
+}): Promise<LiveComment> {
+  // Always hit API first (works without Firebase)
+  const comment = await postLiveComment({
+    roomId: input.roomId,
+    userId: input.userId,
+    userName: input.userName,
+    text: input.text,
+    hostId: input.hostId,
+  });
+
+  // Best-effort Firebase mirror for host apps that only listen on RTDB
+  try {
+    const db = getFirebaseDb();
+    if (isFirebaseReady() && db) {
+      const r = push(ref(db, `liveRooms/${input.roomId}/comments`));
+      await set(r, {
+        userId: input.userId,
+        userName: input.userName,
+        text: input.text,
+        createdAt: comment.createdAt || Date.now(),
+        kind: "comment",
+      });
+    }
+  } catch {
+    /* optional */
   }
-  await postLiveComment(input);
+
+  return comment;
 }
 
 export function listenRoomGiftCoins(

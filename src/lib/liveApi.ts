@@ -158,6 +158,7 @@ export async function postLiveComment(input: {
   userId: string;
   userName: string;
   text: string;
+  hostId?: string;
 }) {
   const res = await fetch(
     `${requireApiBase()}/live/rooms/${encodeURIComponent(input.roomId)}/comments`,

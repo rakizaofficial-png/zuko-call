@@ -13,7 +13,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gem, MoreHorizontal, Plus, X } from "lucide-react";
+import { Gem, MoreHorizontal, Plus, Send, X } from "lucide-react";
 import { gifts } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
@@ -32,6 +32,7 @@ import {
 import {
   listenLiveComments,
   listenRoomGiftCoins,
+  makeOptimisticComment,
   sendLiveComment,
 } from "@/lib/liveChat";
 import { getDeviceUserId } from "@/lib/walletApi";
@@ -69,6 +70,7 @@ export default function HostOnlyLiveRoomPage({
   const [error, setError] = useState<string | null>(null);
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [draft, setDraft] = useState("");
+  const [sendingChat, setSendingChat] = useState(false);
   const [giftOpen, setGiftOpen] = useState(false);
   const [floating, setFloating] = useState<{ id: string; emoji: string }[]>([]);
   const [streamReady, setStreamReady] = useState(false);
@@ -243,18 +245,30 @@ export default function HostOnlyLiveRoomPage({
   const onSendChat = async (e: FormEvent) => {
     e.preventDefault();
     const text = draft.trim();
-    if (!text || !room) return;
+    if (!text || !room || sendingChat) return;
     setDraft("");
+    setSendingChat(true);
+    const optimistic = makeOptimisticComment({ userId, userName, text });
+    setComments((prev) => [...prev, optimistic]);
     try {
-      await sendLiveComment({
+      const saved = await sendLiveComment({
         roomId: room.id,
+        hostId: room.hostId,
         userId,
         userName,
         text,
       });
+      setComments((prev) => {
+        const withoutLocal = prev.filter((c) => c.id !== optimistic.id);
+        if (withoutLocal.some((c) => c.id === saved.id)) return withoutLocal;
+        return [...withoutLocal, saved];
+      });
     } catch (err) {
+      setComments((prev) => prev.filter((c) => c.id !== optimistic.id));
       pushToast?.(err instanceof Error ? err.message : "Message failed");
       setDraft(text);
+    } finally {
+      setSendingChat(false);
     }
   };
 
@@ -402,7 +416,10 @@ export default function HostOnlyLiveRoomPage({
 
         <div className="mt-auto space-y-2">
           {/* Chat overlay */}
-          <div className="pointer-events-none max-h-44 space-y-1.5 overflow-y-auto pr-16 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="pointer-events-none max-h-48 space-y-1.5 overflow-y-auto pr-12 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {comments.length === 0 && (
+              <p className="text-xs text-white/50">Say hi — chat appears here</p>
+            )}
             {comments.map((m) =>
               m.kind === "gift" ? (
                 <div
@@ -459,8 +476,19 @@ export default function HostOnlyLiveRoomPage({
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Type something sweet..."
               maxLength={200}
-              className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/45 px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/45 backdrop-blur-md"
+              enterKeyHint="send"
+              autoComplete="off"
+              disabled={sendingChat || !room}
+              className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/45 px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/45 backdrop-blur-md disabled:opacity-60"
             />
+            <button
+              type="submit"
+              disabled={sendingChat || !draft.trim() || !room}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#ff2d55] disabled:opacity-40"
+              aria-label="Send message"
+            >
+              <Send className="h-4 w-4 text-white" />
+            </button>
             <button
               type="button"
               onClick={() => setGiftOpen(true)}
