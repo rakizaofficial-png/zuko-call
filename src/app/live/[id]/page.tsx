@@ -74,6 +74,7 @@ export default function HostOnlyLiveRoomPage({
   const [giftOpen, setGiftOpen] = useState(false);
   const [floating, setFloating] = useState<{ id: string; emoji: string }[]>([]);
   const [streamReady, setStreamReady] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const userId = useMemo(() => getDeviceUserId(), []);
   const userName = "Luma Fan";
@@ -84,6 +85,8 @@ export default function HostOnlyLiveRoomPage({
         room.hostAvatar.includes("dicebear") ||
         !room.hostAvatar.includes("unsplash")),
   );
+
+  const chatEnabled = Boolean(room?.id && (status === "live" || status === "loading"));
 
   const loadRoom = useCallback(async () => {
     const next = await fetchHostOnlyLiveRoom(id);
@@ -97,7 +100,7 @@ export default function HostOnlyLiveRoomPage({
     return next;
   }, [id]);
 
-  // Resolve room + join Agora as viewer
+  // Resolve room + join Agora as viewer (video failure must NOT kill chat)
   useEffect(() => {
     let cancelled = false;
     let joinedRoomId: string | null = null;
@@ -123,27 +126,38 @@ export default function HostOnlyLiveRoomPage({
           userName,
         });
 
-        const el = await waitForVideoEl();
-        if (cancelled) return;
-        if (!el) throw new Error("Video mount missing");
+        try {
+          const el = await waitForVideoEl();
+          if (cancelled) return;
+          if (!el) throw new Error("Video mount missing");
 
-        const channel = next.channel || `live_${next.hostId}`;
-        const uid = 300000 + Math.floor(Math.random() * 90000);
-        const token = await fetchLiveAgoraToken(channel, uid);
-        // Prefer server App ID so Render works even without NEXT_PUBLIC_AGORA_APP_ID
-        const appId = token.appId || resolveAgoraAppId();
-        if (!appId) throw new Error("Agora App ID missing");
+          const channel = next.channel || `live_${next.hostId}`;
+          const uid = 300000 + Math.floor(Math.random() * 90000);
+          const token = await fetchLiveAgoraToken(channel, uid);
+          const appId = token.appId || resolveAgoraAppId();
+          if (!appId) throw new Error("Agora App ID missing");
 
-        await startUserAgoraLiveViewer({
-          appId,
-          channel: token.channel || channel,
-          token: token.token,
-          uid: token.uid || uid,
-          remoteVideoEl: el,
-          onRemoteVideo: () => {
-            if (!cancelled) setStreamReady(true);
-          },
-        });
+          await startUserAgoraLiveViewer({
+            appId,
+            channel: token.channel || channel,
+            token: token.token,
+            uid: token.uid || uid,
+            remoteVideoEl: el,
+            onRemoteVideo: () => {
+              if (!cancelled) {
+                setStreamReady(true);
+                setVideoError(null);
+              }
+            },
+          });
+        } catch (ve) {
+          if (!cancelled) {
+            setVideoError(
+              ve instanceof Error ? ve.message : "Video unavailable",
+            );
+            // Keep status=live so chat/gifts still work
+          }
+        }
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Could not join live");
@@ -166,9 +180,9 @@ export default function HostOnlyLiveRoomPage({
     };
   }, [id, loadRoom, userId]);
 
-  // Chat + diamonds + end detection
+  // Chat + diamonds + end detection — keep listening while room is known
   useEffect(() => {
-    if (!room?.id || status !== "live") return;
+    if (!room?.id || status === "ended" || status === "error") return;
 
     const offChat = listenLiveComments(room.id, userId, setComments);
     const offGift = listenRoomGiftCoins(room.id, (giftCoins, viewers) => {
@@ -193,9 +207,39 @@ export default function HostOnlyLiveRoomPage({
       if (ev.type === "live:viewers" && ev.payload.roomId === room.id) {
         setRoom((r) => (r ? { ...r, viewers: ev.payload.viewers } : r));
       }
+      if (ev.type === "live:comment") {
+        const p = ev.payload;
+        if (!p.comment) return;
+        const rid = p.roomId;
+        if (
+          rid &&
+          rid !== room.id &&
+          rid !== `live_${room.hostId}` &&
+          !String(rid).includes(room.hostId)
+        ) {
+          return;
+        }
+        setComments((prev) => {
+          if (prev.some((c) => c.id === p.comment.id)) return prev;
+          return [
+            ...prev,
+            {
+              id: p.comment.id,
+              userId: p.comment.userId,
+              userName: p.comment.userName,
+              text: p.comment.text,
+              createdAt: p.comment.createdAt,
+              kind: (p.comment.kind as LiveComment["kind"]) || "comment",
+              giftEmoji: p.comment.giftEmoji,
+              giftCoins: p.comment.giftCoins,
+            },
+          ].slice(-80);
+        });
+      }
       if (ev.type === "gift:received") {
         const p = ev.payload;
-        if (p.roomId && p.roomId !== room.id) return;
+        if (p.roomId && p.roomId !== room.id && p.roomId !== `live_${room.hostId}`)
+          return;
         if (p.toHostId && p.toHostId !== room.hostId) return;
         setRoom((r) =>
           r ? { ...r, giftCoins: r.giftCoins + Number(p.coins || 0) } : r,
@@ -318,7 +362,7 @@ export default function HostOnlyLiveRoomPage({
 
       {/* Cover while connecting / waiting for host video */}
       {!streamReady && (
-        <div className="absolute inset-0 z-[1]">
+        <div className="pointer-events-none absolute inset-0 z-[1]">
           <Image
             src={avatar}
             alt=""
@@ -329,10 +373,10 @@ export default function HostOnlyLiveRoomPage({
           />
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <p className="rounded-full bg-black/55 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
-              {status === "error"
-                ? "Connection failed"
-                : status === "ended"
-                  ? "Live ended"
+              {status === "ended"
+                ? "Live ended"
+                : videoError
+                  ? "Chat ready · waiting for host camera"
                   : "Connecting to host…"}
             </p>
           </div>
@@ -474,16 +518,23 @@ export default function HostOnlyLiveRoomPage({
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  const form = e.currentTarget.form;
+                  form?.requestSubmit();
+                }
+              }}
               placeholder="Type something sweet..."
               maxLength={200}
               enterKeyHint="send"
               autoComplete="off"
-              disabled={sendingChat || !room}
+              disabled={sendingChat || !chatEnabled}
               className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/45 px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/45 backdrop-blur-md disabled:opacity-60"
             />
             <button
               type="submit"
-              disabled={sendingChat || !draft.trim() || !room}
+              disabled={sendingChat || !draft.trim() || !chatEnabled}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#ff2d55] disabled:opacity-40"
               aria-label="Send message"
             >
@@ -526,14 +577,33 @@ export default function HostOnlyLiveRoomPage({
         ))}
       </AnimatePresence>
 
-      {(status === "ended" || status === "error") && (
+      {status === "ended" && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 px-6 text-center backdrop-blur-sm">
           <div>
             <p className="font-display text-2xl font-bold text-white">
-              {status === "ended" ? "Live ended" : "Can't join"}
+              Live ended
             </p>
             <p className="mt-2 text-sm text-white/70">
               {error || "This host is no longer streaming."}
+            </p>
+            <Link
+              href="/live"
+              className="mt-5 inline-flex rounded-full bg-[#ff2d55] px-5 py-2.5 text-sm font-bold text-white"
+            >
+              Back to Live
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {status === "error" && !room && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 px-6 text-center backdrop-blur-sm">
+          <div>
+            <p className="font-display text-2xl font-bold text-white">
+              Can&apos;t join
+            </p>
+            <p className="mt-2 text-sm text-white/70">
+              {error || "Live room unavailable."}
             </p>
             <Link
               href="/live"
