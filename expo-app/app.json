@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Luma",
+    "slug": "luma-user",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0b0d12"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.luma.user",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Luma needs camera for video calls.",
+        "NSMicrophoneUsageDescription": "Luma needs microphone for calls.",
+        "NSPhotoLibraryUsageDescription": "Luma needs photos for your profile."
+      }
+    },
+    "android": {
+      "package": "com.luma.user",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b0d12"
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "INTERNET"
+      ]
+    },
+    "extra": {
+      "lumaWebUrl": "https://luma-user.onrender.com"
+    }
+  }
+}

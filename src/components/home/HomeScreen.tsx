@@ -8,6 +8,7 @@ import {
   HostGridCard,
   HostGridSkeleton,
 } from "@/components/host/PremiumHostCard";
+import { HomePromoSwipe } from "@/components/home/HomePromoSwipe";
 import { LibraryPreviewPlayer } from "@/components/media/LibraryPreviewPlayer";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { WalletDiamond } from "@/components/WalletDiamond";
@@ -17,6 +18,11 @@ import {
   mergeDiscoverHosts,
   type DiscoverHost,
 } from "@/lib/discoverHosts";
+import {
+  fetchHomeBanners,
+  type HomeHeroBanner,
+  type PromoSlide,
+} from "@/lib/homeBanners";
 import { useApp } from "@/lib/store";
 import { useRouter } from "next/navigation";
 
@@ -25,7 +31,7 @@ type Tab = "live" | "call";
 const DISCOUNT_KEY = "luma_home_discount_dismissed";
 const REGIONS = ["All", "Pakistan", "Philippines", "Brazil", "Vietnam", "India"] as const;
 
-/** Clean home — Live + Calling host cards, modern profile cards */
+/** Clean home — compact admin hero + swipe promos + host cards */
 export function HomeScreen() {
   const { freeTrialAvailable, coins, pushToast } = useApp();
   const router = useRouter();
@@ -36,6 +42,8 @@ export function HomeScreen() {
   const [region, setRegion] = useState<(typeof REGIONS)[number]>("All");
   const [discountOpen, setDiscountOpen] = useState(false);
   const [searchingId, setSearchingId] = useState(false);
+  const [hero, setHero] = useState<HomeHeroBanner | null>(null);
+  const [promos, setPromos] = useState<PromoSlide[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,11 +58,26 @@ export function HomeScreen() {
       }
     };
     void load();
-    // Real-time DP / online sync without logout or hard refresh
     const timer = setInterval(() => void load(), 8_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadBanners = async () => {
+      const data = await fetchHomeBanners();
+      if (cancelled) return;
+      setHero(data.hero);
+      setPromos(data.promos || []);
+    };
+    void loadBanners();
+    const t = setInterval(() => void loadBanners(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
     };
   }, []);
 
@@ -121,11 +144,24 @@ export function HomeScreen() {
     }
   };
 
+  const heroFrom = hero?.gradientFrom || "#ffb020";
+  const heroTo = hero?.gradientTo || "#ff6b2b";
+  const showHero = Boolean(hero);
+
   return (
     <main className="relative pb-28">
-      <header className="overflow-hidden bg-gradient-to-br from-[#ffb020] via-[#ff9a1a] to-[#ff6b2b] px-4 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-black/50">
+      <header
+        className="overflow-hidden px-4 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
+        style={
+          showHero
+            ? {
+                background: `linear-gradient(135deg, ${heroFrom}, ${heroTo})`,
+              }
+            : undefined
+        }
+      >
+        <div className="mb-1.5 flex items-center justify-between">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/50">
             Luma
           </p>
           <div className="flex items-center gap-2">
@@ -136,23 +172,36 @@ export function HomeScreen() {
             <WalletDiamond compact />
             <Link
               href="/call"
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#ff6b1a] text-white shadow"
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#ff6b1a] text-white shadow"
               aria-label="Video lobby"
             >
-              <Video className="h-4 w-4" />
+              <Video className="h-3.5 w-3.5" />
             </Link>
           </div>
         </div>
-        <h1 className="font-display text-[1.85rem] font-extrabold leading-tight text-[#2a1600]">
-          Meet more friends.
-        </h1>
-        <Link
-          href="/match"
-          className="mt-3 inline-flex items-center rounded-full bg-white/90 px-4 py-2 text-xs font-bold text-[#2a1600] shadow"
-        >
-          Tap to Match →
-        </Link>
+        {showHero ? (
+          <div className="flex items-end justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="font-display text-[1.25rem] font-extrabold leading-tight text-[#2a1600]">
+                {hero?.title || "Meet more friends"}
+              </h1>
+              {hero?.subtitle ? (
+                <p className="mt-0.5 text-[11px] font-medium text-black/55">
+                  {hero.subtitle}
+                </p>
+              ) : null}
+            </div>
+            <Link
+              href={hero?.ctaHref || "/match"}
+              className="shrink-0 rounded-full bg-white/90 px-3.5 py-1.5 text-[11px] font-bold text-[#2a1600] shadow"
+            >
+              {hero?.ctaLabel || "Match"} →
+            </Link>
+          </div>
+        ) : null}
       </header>
+
+      <HomePromoSwipe promos={promos} />
 
       <div className="sticky top-0 z-30 border-b border-line/50 bg-ink/90 px-4 pb-3 pt-3 backdrop-blur-xl">
         <label className="flex items-center gap-2 rounded-2xl border border-line bg-ink-2/70 px-3 py-2.5">
@@ -227,7 +276,7 @@ export function HomeScreen() {
         </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3">
         <LibraryPreviewPlayer category="preview" countdownSec={8} />
       </div>
 
