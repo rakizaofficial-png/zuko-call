@@ -86,13 +86,13 @@ export const WELCOME_PUSH_CONFIG = {
   /** Incoming modal + ringtone auto-end */
   ringDurationMinMs: 22_000,
   ringDurationMaxMs: 35_000,
-  /** Teaser hard-cut → recharge paywall (when user has coins) */
-  teaserCutMs: 2800,
+  /** Teaser hard-cut → recharge paywall (when user has coins) — 30s mobile fake call */
+  teaserCutMs: 30_000,
   /** Paywall FOMO countdown */
   offerSeconds: 45,
   /** Don't reuse these many recent hosts / messages */
   hostCooldownCount: 10,
   messageCooldownCount: 14,
   /** Bump when media / timing rules change */
-  storageKey: "luma_welcome_push_v6",
+  storageKey: "luma_welcome_push_v7",
 } as const;

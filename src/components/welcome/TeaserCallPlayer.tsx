@@ -8,7 +8,7 @@ import { pickRandomConnectLine } from "@/lib/welcomePush/uiCopy";
 
 /**
  * Hidden immersive teaser player — no controls / scrubber.
- * Parent hard-cuts at teaserCutMs into PAYWALL_BOOST.
+ * Loops a mobile portrait clip; parent hard-cuts at 30s into PAYWALL_BOOST.
  */
 export function TeaserCallPlayer({
   host,
@@ -26,6 +26,7 @@ export function TeaserCallPlayer({
     el.controls = false;
     el.playsInline = true;
     el.muted = false;
+    el.loop = true;
     const play = async () => {
       try {
         await el.play();
@@ -57,9 +58,11 @@ export function TeaserCallPlayer({
       <video
         ref={videoRef}
         src={host.teaser_video_url}
+        poster={host.avatar}
         className="absolute inset-0 h-full w-full object-cover"
         autoPlay
         playsInline
+        loop
         controls={false}
         disablePictureInPicture
         controlsList="nodownload noplaybackrate noremoteplayback"

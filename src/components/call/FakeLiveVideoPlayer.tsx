@@ -2,14 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AiHostRecord } from "@/lib/aiHosts/types";
+import { FAKE_CALL_PREVIEW_MS } from "@/lib/welcomePush/mobileFakeCallVideos";
 
 type Phase = "intro" | "loop";
 
 /**
- * Hidden full-screen “live” video layer.
- * No spinner, no scrubber, no native controls — looks like a front-camera feed.
- *
- * CLOUD BUCKET: aiHost.video_url_1 / video_url_2 should point at your bucket clips.
+ * Hidden full-screen “live” video layer for mobile fake calls.
+ * Intro plays up to 30s, then seamless loop — no controls.
  */
 export function FakeLiveVideoPlayer({
   aiHost,
@@ -33,6 +32,15 @@ export function FakeLiveVideoPlayer({
   }, [active, aiHost.host_id, aiHost.video_url_1]);
 
   useEffect(() => {
+    if (!active || phase !== "intro") return;
+    const t = setTimeout(() => {
+      setPhase("loop");
+      setSrc(aiHost.video_url_2 || aiHost.video_url_1);
+    }, FAKE_CALL_PREVIEW_MS);
+    return () => clearTimeout(t);
+  }, [active, phase, aiHost.video_url_1, aiHost.video_url_2]);
+
+  useEffect(() => {
     const el = videoRef.current;
     if (!el || !active) return;
 
@@ -40,31 +48,30 @@ export function FakeLiveVideoPlayer({
     el.playsInline = true;
     el.setAttribute("playsinline", "true");
     el.setAttribute("webkit-playsinline", "true");
-    // Hide any native UI chrome
     el.controls = false;
     el.disablePictureInPicture = true;
+    el.loop = phase === "loop";
 
     const tryPlay = async () => {
       try {
         await el.play();
       } catch {
-        // Autoplay policies: mute then retry (still looks like live video)
         el.muted = true;
         try {
           await el.play();
         } catch {
-          /* keep poster frame — no spinner */
+          /* keep poster */
         }
       }
     };
 
     void tryPlay();
-  }, [active, src, muted]);
+  }, [active, src, muted, phase]);
 
   const onEnded = () => {
     if (phase === "intro") {
       setPhase("loop");
-      setSrc(aiHost.video_url_2);
+      setSrc(aiHost.video_url_2 || aiHost.video_url_1);
     }
   };
 
@@ -75,7 +82,6 @@ export function FakeLiveVideoPlayer({
       className={`absolute inset-0 z-[1] overflow-hidden bg-black ${className}`}
       aria-hidden
     >
-      {/* Soft vignette so it reads as a camera feed, not a media player */}
       <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/25 via-transparent to-black/50" />
       <video
         ref={videoRef}
@@ -90,14 +96,9 @@ export function FakeLiveVideoPlayer({
         disablePictureInPicture
         preload="auto"
         onEnded={onEnded}
-        // Prevent long-press download UI on some mobile browsers
         controlsList="nodownload noplaybackrate noremoteplayback"
-        style={{
-          // Kill default media appearance
-          background: "#000",
-        }}
+        style={{ background: "#000" }}
       />
-      {/* Invisible hit-blocker so users can’t accidentally pause the “live” feed */}
       <div className="absolute inset-0 z-[3]" />
     </div>
   );
