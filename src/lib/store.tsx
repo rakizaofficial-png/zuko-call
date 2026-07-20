@@ -53,7 +53,7 @@ import {
 } from "@/lib/userProfile";
 import { getRealtimeClient } from "@/lib/realtime/websocket";
 
-type Toast = { id: number; text: string };
+type Toast = { id: string; text: string };
 
 type AppStore = {
   ready: boolean;
@@ -107,6 +107,8 @@ type AppStore = {
 
 const Ctx = createContext<AppStore | null>(null);
 
+let toastSeq = 0;
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [userId, setUserId] = useState("");
@@ -129,7 +131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const freeTrialAvailable = !engagement.freeTrialUsed;
 
   const pushToast = useCallback((text: string) => {
-    const id = Date.now();
+    const id = `${Date.now()}-${++toastSeq}`;
     setToasts((t) => [...t, { id, text }]);
     setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id));
