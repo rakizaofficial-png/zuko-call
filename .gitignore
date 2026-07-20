@@ -41,3 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 .tools/
+
+# Expo shell
+expo-app/node_modules/
+expo-app/.expo/
+expo-app/.fake-home/

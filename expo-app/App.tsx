@@ -1,15 +1,37 @@
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { Platform, SafeAreaView, StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
+import * as ScreenCapture from "expo-screen-capture";
 
 /**
  * Expo shell — loads the production Luma Next.js user app in a WebView.
+ * Anti-screenshot / anti-recording via FLAG_SECURE (Android) + screen capture
+ * prevention APIs. Web browsers cannot enforce this — native build required.
  *
  *   cd expo-app && npm install && npx expo start
+ *   eas build --platform android --profile production
  */
-const LUMA_URL = "https://luma-user.onrender.com";
+const LUMA_URL =
+  process.env.EXPO_PUBLIC_LUMA_WEB_URL || "https://luma-user.onrender.com";
 
 export default function App() {
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        await ScreenCapture.preventScreenCaptureAsync();
+      } catch {
+        /* Expo Go / web may not support FlagSecure */
+      }
+    })();
+    return () => {
+      if (!active) return;
+      active = false;
+      void ScreenCapture.allowScreenCaptureAsync().catch(() => undefined);
+    };
+  }, []);
+
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar style="light" />
@@ -23,6 +45,7 @@ export default function App() {
           domStorageEnabled
           startInLoadingState
           allowsBackForwardNavigationGestures
+          mediaCapturePermissionGrantType="grant"
           {...(Platform.OS === "ios"
             ? { allowsAirPlayForMediaPlayback: true }
             : {})}

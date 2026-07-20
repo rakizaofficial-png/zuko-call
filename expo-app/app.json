@@ -26,11 +26,20 @@
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
-        "INTERNET"
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "WAKE_LOCK",
+        "MODIFY_AUDIO_SETTINGS"
       ]
     },
+    "plugins": [
+      "expo-screen-capture"
+    ],
     "extra": {
-      "lumaWebUrl": "https://luma-user.onrender.com"
+      "lumaWebUrl": "https://luma-user.onrender.com",
+      "eas": {
+        "projectId": ""
+      }
     }
   }
 }
