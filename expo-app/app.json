@@ -7,6 +7,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#0b0d12"
     },
     "ios": {
@@ -21,6 +23,7 @@
     "android": {
       "package": "com.luma.user",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0b0d12"
       },
       "permissions": [
