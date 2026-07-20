@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock3, Sparkles, Zap } from "lucide-react";
 import {
@@ -12,7 +11,7 @@ import { useApp } from "@/lib/store";
 
 /**
  * High-conversion recharge paywall — opens the moment Answer hits 0 coins.
- * Blurred looping call video stays behind the sheet as FOMO pressure.
+ * Host profile photo stays behind the sheet as FOMO pressure (no video).
  */
 export function RechargePaywallSheet({
   open,
@@ -27,15 +26,6 @@ export function RechargePaywallSheet({
 }) {
   const { userId, pushToast, syncWallet, setPremium } = useApp();
   const tiers = buildPaywallTiers(host.name);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const el = videoRef.current;
-    if (!el) return;
-    el.muted = true;
-    void el.play().catch(() => undefined);
-  }, [open, host.ring_video_url]);
 
   const buy = async (tier: (typeof tiers)[number]) => {
     if (!userId) {
@@ -73,26 +63,15 @@ export function RechargePaywallSheet({
     <AnimatePresence>
       {open && (
         <>
-          {/* Blurred live call backdrop */}
+          {/* Host profile backdrop */}
           <motion.div
             className="fixed inset-0 z-[110] mx-auto max-w-[430px] overflow-hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <video
-              ref={videoRef}
-              className="absolute inset-0 h-full w-full scale-110 object-cover blur-xl brightness-[0.35]"
-              src={host.ring_video_url || host.teaser_video_url}
-              poster={host.avatar}
-              autoPlay
-              muted
-              loop
-              playsInline
-              aria-hidden
-            />
             <div
-              className="absolute inset-0 bg-cover bg-center opacity-40 blur-2xl"
+              className="absolute inset-0 scale-110 bg-cover bg-center blur-xl brightness-[0.4]"
               style={{ backgroundImage: `url(${host.avatar})` }}
               aria-hidden
             />

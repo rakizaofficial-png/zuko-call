@@ -1,49 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import type { WelcomePushHost } from "@/lib/welcomePush/config";
 import { pickRandomConnectLine } from "@/lib/welcomePush/uiCopy";
 
 /**
- * Hidden immersive teaser player — no controls / scrubber.
- * Loops a mobile portrait clip; parent hard-cuts at 30s into PAYWALL_BOOST.
+ * Connected automated-call view — host profile photo only (no teaser video).
  */
 export function TeaserCallPlayer({
   host,
-  onHardCut,
 }: {
   host: WelcomePushHost;
   onHardCut?: () => void;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [connectLine] = useState(() => pickRandomConnectLine());
 
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    el.controls = false;
-    el.playsInline = true;
-    el.muted = false;
-    el.loop = true;
-    const play = async () => {
-      try {
-        await el.play();
-      } catch {
-        el.muted = true;
-        try {
-          await el.play();
-        } catch {
-          onHardCut?.();
-        }
-      }
-    };
-    void play();
-  }, [onHardCut, host.teaser_video_url]);
-
   const liveLabel = useMemo(
-    () => (host.source === "live" ? "Live · Private" : "Preview · Private"),
+    () => (host.source === "live" ? "Live · Private" : "Connected · Private"),
     [host.source],
   );
 
@@ -55,20 +30,23 @@ export function TeaserCallPlayer({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.35 }}
     >
-      <video
-        ref={videoRef}
-        src={host.teaser_video_url}
-        poster={host.avatar}
-        className="absolute inset-0 h-full w-full object-cover"
-        autoPlay
-        playsInline
-        loop
-        controls={false}
-        disablePictureInPicture
-        controlsList="nodownload noplaybackrate noremoteplayback"
-        preload="auto"
-      />
-      <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/40 via-transparent to-black/70" />
+      <motion.div
+        className="absolute inset-0"
+        initial={{ scale: 1.05 }}
+        animate={{ scale: 1.12 }}
+        transition={{ duration: 18, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
+      >
+        <Image
+          src={host.avatar}
+          alt=""
+          fill
+          priority
+          className="object-cover object-top"
+          sizes="430px"
+        />
+      </motion.div>
+
+      <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/45 via-transparent to-black/75" />
       <div className="absolute inset-0 z-[3]" />
 
       <motion.div
@@ -91,9 +69,9 @@ export function TeaserCallPlayer({
           <Image
             src={host.avatar}
             alt=""
-            width={48}
-            height={48}
-            className="h-12 w-12 object-cover"
+            width={64}
+            height={64}
+            className="h-16 w-16 object-cover object-top"
           />
         </motion.div>
         <p className="font-display text-xl font-extrabold text-white">

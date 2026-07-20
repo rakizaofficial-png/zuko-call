@@ -1,14 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { BadgeCheck, Crown, Globe2, Phone, PhoneOff, Sparkles } from "lucide-react";
 import type { WelcomePushHost } from "@/lib/welcomePush/config";
 
 /**
- * Full-screen incoming call lure —
- * girl still (Ken Burns) + portrait waiting video on top.
+ * Full-screen incoming call lure — host profile photo only (no background video).
  */
 export function IncomingCallLure({
   host,
@@ -21,26 +19,6 @@ export function IncomingCallLure({
   onAccept: () => void;
   onReject: () => void;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoOk, setVideoOk] = useState(Boolean(host.ring_video_url));
-
-  useEffect(() => {
-    setVideoOk(Boolean(host.ring_video_url));
-  }, [host.ring_video_url]);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el || !videoOk) return;
-    el.muted = true;
-    el.playsInline = true;
-    const play = () => {
-      void el.play().catch(() => setVideoOk(false));
-    };
-    play();
-    el.addEventListener("loadeddata", play);
-    return () => el.removeEventListener("loadeddata", play);
-  }, [host.ring_video_url, videoOk]);
-
   return (
     <motion.div
       className="fixed inset-0 z-[100] mx-auto flex w-full max-w-[430px] flex-col overflow-hidden bg-[#06040b]"
@@ -49,12 +27,11 @@ export function IncomingCallLure({
       exit={{ opacity: 0, y: 16, scale: 0.98 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
     >
-      {/* Always show glamorous girl still — never a city crowd */}
       <motion.div
         className="absolute inset-0"
-        initial={{ scale: 1.08 }}
-        animate={{ scale: 1.18 }}
-        transition={{ duration: 14, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
+        initial={{ scale: 1.06 }}
+        animate={{ scale: 1.14 }}
+        transition={{ duration: 16, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
       >
         <Image
           src={host.avatar}
@@ -66,24 +43,7 @@ export function IncomingCallLure({
         />
       </motion.div>
 
-      {/* Portrait waiting video (fades in when healthy) */}
-      {videoOk && host.ring_video_url ? (
-        <video
-          ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover object-top"
-          src={host.ring_video_url}
-          poster={host.avatar}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          aria-hidden
-          onError={() => setVideoOk(false)}
-        />
-      ) : null}
-
-      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-[#06040b]/35 to-[#06040b]/92" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-[#06040b]/40 to-[#06040b]/95" />
 
       <motion.div
         aria-hidden
@@ -100,7 +60,7 @@ export function IncomingCallLure({
 
       <div className="relative z-10 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan">
-          Luma · Private video
+          Luma · Private call
         </p>
         <motion.span
           className="inline-flex items-center gap-1.5 rounded-full border border-teal/40 bg-teal/15 px-2.5 py-1 text-[10px] font-bold text-teal"
@@ -281,7 +241,7 @@ export function IncomingCallLure({
               Accept
             </span>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-100/90">
-              Answer video call
+              Answer private call
             </span>
           </motion.button>
         </div>
