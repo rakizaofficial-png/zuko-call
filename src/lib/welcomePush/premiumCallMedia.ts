@@ -111,6 +111,34 @@ export const PREMIUM_CALL_MEDIA: readonly PremiumCallMediaPack[] = [
     ringVideo: M(3989),
     teaserVideo: M(3989),
   },
+  {
+    id: "red_dress_01",
+    vibe: "nightlife",
+    avatar: U("1524504388940-b1c1722653e1", "w=900&h=1400&fit=crop&q=85"),
+    ringVideo: M(4271),
+    teaserVideo: M(4271),
+  },
+  {
+    id: "lingerie_glam_01",
+    vibe: "glam",
+    avatar: U("1516726817505-f5ed825624d8", "w=900&h=1400&fit=crop&q=85"),
+    ringVideo: M(1232),
+    teaserVideo: M(1232),
+  },
+  {
+    id: "poolside_adult_01",
+    vibe: "pool",
+    avatar: U("1529626455594-4ff0802cfb7e", "w=900&h=1400&fit=crop&q=85"),
+    ringVideo: M(4154),
+    teaserVideo: M(4154),
+  },
+  {
+    id: "sunset_bikini_01",
+    vibe: "beach",
+    avatar: U("1503104834685-7205e8607eb9", "w=900&h=1400&fit=crop&q=85"),
+    ringVideo: M(3986),
+    teaserVideo: M(3986),
+  },
 ] as const;
 
 export function pickPremiumCallMedia(index = 0): PremiumCallMediaPack {

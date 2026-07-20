@@ -11,7 +11,8 @@ import { ensurePremiumFemalePool } from "@/lib/welcomePush/premiumFemaleGenerato
 
 /**
  * Simulated premium female incoming-call engine.
- * Fires every 1–2 min while browsing → video ring → answer → recharge if broke.
+ * Fires while browsing home/call/match → video ring → answer → recharge if broke.
+ * Host profile pages use HostProfileAutoCall separately (call from that host).
  */
 export function WelcomePushEngine() {
   const pathname = usePathname();
@@ -19,12 +20,19 @@ export function WelcomePushEngine() {
     pathname === "/" ||
     pathname === "" ||
     pathname === "/call" ||
-    pathname === "/match";
+    pathname === "/match" ||
+    pathname === "/live" ||
+    pathname === "/party";
+
+  // Pause global auto-call while viewing a specific host profile
+  // (profile has its own HostProfileAutoCall from that host)
+  const onHostProfile = pathname.startsWith("/host/");
+  const enabled = onDashboard && !onHostProfile;
 
   useEffect(() => {
-    if (!onDashboard) return;
+    if (!enabled) return;
     ensurePremiumFemalePool();
-  }, [onDashboard]);
+  }, [enabled]);
 
   const {
     phase,
@@ -35,7 +43,7 @@ export function WelcomePushEngine() {
     rejectIncoming,
     closePaywall,
     hardDisconnectTeaser,
-  } = useWelcomePushCall({ enabled: onDashboard });
+  } = useWelcomePushCall({ enabled });
 
   if (phase === "IDLE") return null;
 

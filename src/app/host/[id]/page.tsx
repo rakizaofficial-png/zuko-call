@@ -21,6 +21,7 @@ import { openDmWithHost } from "@/lib/dmStore";
 import { useApp } from "@/lib/store";
 import { pickHostAvatarUrl } from "@/lib/hostAvatar";
 import { HostAvatarImg } from "@/components/host/HostAvatarImg";
+import { HostProfileAutoCall } from "@/components/welcome/HostProfileAutoCall";
 
 async function fetchHostProfile(id: string): Promise<{
   name?: string;
@@ -261,6 +262,8 @@ export default function HostProfilePage({
           </Link>
         </div>
       </section>
+
+      <HostProfileAutoCall host={host} />
     </main>
   );
 }

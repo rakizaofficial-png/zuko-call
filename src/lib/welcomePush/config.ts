@@ -76,13 +76,13 @@ export const WELCOME_PAYWALL_TIERS = buildPaywallTiers("her");
 export const WELCOME_PUSH_CONFIG = {
   /**
    * First lure after home / dashboard browsing.
-   * Natural 1–2 min window — never spam on entry.
+   * Short window so auto-calls feel active while browsing.
    */
-  launchDelayMinMs: 60_000,
-  launchDelayMaxMs: 120_000,
-  /** Recurring lure while browsing — fluctuating 1–2 min */
-  repeatEveryMinMs: 60_000,
-  repeatEveryMaxMs: 120_000,
+  launchDelayMinMs: 12_000,
+  launchDelayMaxMs: 28_000,
+  /** Recurring lure while browsing */
+  repeatEveryMinMs: 45_000,
+  repeatEveryMaxMs: 90_000,
   /** Incoming modal + ringtone auto-end */
   ringDurationMinMs: 22_000,
   ringDurationMaxMs: 35_000,
@@ -94,5 +94,5 @@ export const WELCOME_PUSH_CONFIG = {
   hostCooldownCount: 10,
   messageCooldownCount: 14,
   /** Bump when media / timing rules change */
-  storageKey: "luma_welcome_push_v5",
+  storageKey: "luma_welcome_push_v6",
 } as const;
