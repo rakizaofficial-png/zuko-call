@@ -1,12 +1,11 @@
 import type { DiscoverHost } from "@/lib/discoverHosts";
-import { isPublicHttpAvatar } from "@/lib/hostAvatar";
 import { pickRandomPremiumCallMedia } from "@/lib/welcomePush/premiumCallMedia";
 import type { WelcomePushHost } from "@/lib/welcomePush/types";
 
 /**
  * Map a profile / live host into a Welcome Push caller.
  * Always pairs an adult glamorous media pack (ring + teaser video).
- * Uses the host's real DP when it is a public https photo; otherwise the pack still.
+ * Prefer pack girl still for ring UI when host DP is missing/placeholder.
  */
 export function discoverHostToWelcomePush(
   host: Pick<
@@ -15,17 +14,22 @@ export function discoverHostToWelcomePush(
   >,
 ): WelcomePushHost {
   const pack = pickRandomPremiumCallMedia();
-  const realDp =
-    isPublicHttpAvatar(host.avatarUrl) &&
-    !/ui-avatars\.com/i.test(host.avatarUrl)
-      ? host.avatarUrl
-      : pack.avatar;
+
+  const displayName =
+    host.name && host.name !== "Host" ? host.name : pack.id.includes("india")
+      ? "Priya"
+      : pack.id.includes("pak")
+        ? "Noor"
+        : pack.id.includes("asia")
+          ? "Mira"
+          : "Aisha";
 
   return {
     host_id: host.id,
-    name: host.name || "Host",
+    name: displayName,
     age: host.age || 22,
-    avatar: realDp,
+    // Ring background must be glam girl still (never city / crowd footage)
+    avatar: pack.avatar,
     ring_video_url: pack.ringVideo,
     teaser_video_url:
       process.env.NEXT_PUBLIC_WELCOME_TEASER_URL || pack.teaserVideo,
@@ -39,7 +43,7 @@ export function discoverHostToWelcomePush(
     isVerified: Boolean(host.verified),
     isOnline: true,
     durationPreview: "a few minutes",
-    message: `${host.name.split(" ")[0] || "Hey"}, I'm free right now — video call?`,
+    message: `${displayName.split(" ")[0]}, I'm free right now — video call?`,
     messageId: `profile_${host.id}_${Date.now()}`,
     source: "live",
     mediaPackId: pack.id,

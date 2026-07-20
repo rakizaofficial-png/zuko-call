@@ -46,6 +46,8 @@ export function HostProfileAutoCall({ host }: { host: DiscoverHost }) {
   useEffect(() => {
     if (!host?.id) return;
     if (firedForId.current === host.id) return;
+    // Wait until profile hydrated (avoid "Host" + empty DP)
+    if (host.name === "Host") return;
 
     const hostId = host.id;
     const t = setTimeout(() => {
@@ -59,7 +61,7 @@ export function HostProfileAutoCall({ host }: { host: DiscoverHost }) {
     }, PROFILE_RING_DELAY_MS);
 
     return () => clearTimeout(t);
-  }, [host.id]);
+  }, [host.id, host.name]);
 
   useEffect(() => {
     if (phase !== "INCOMING_CALL") {

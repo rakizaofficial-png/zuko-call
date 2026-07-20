@@ -19,11 +19,12 @@ export const WELCOME_PUSH_HOST: WelcomePushHost = {
   name: "Mira",
   age: 23,
   avatar:
-    "https://images.unsplash.com/photo-1496440737103-cd596325d314?w=900&h=1400&fit=crop&q=85",
-  ring_video_url: "https://assets.mixkit.co/videos/1215/1215-720.mp4",
+    "https://images.unsplash.com/photo-1531746020798-e6953c440e19?w=720&h=1280&fit=crop&q=85&crop=faces",
+  ring_video_url:
+    "https://videos.pexels.com/video-files/2499611/2499611-hd_720_1280_30fps.mp4",
   teaser_video_url:
     process.env.NEXT_PUBLIC_WELCOME_TEASER_URL ||
-    "https://assets.mixkit.co/videos/1215/1215-720.mp4",
+    "https://videos.pexels.com/video-files/6010878/6010878-hd_720_1280_30fps.mp4",
   country: "Korea",
   flag: "🇰🇷",
   language: "Korean · English",
@@ -37,7 +38,7 @@ export const WELCOME_PUSH_HOST: WelcomePushHost = {
   message: "Hi, I'm online now.",
   messageId: "m01",
   source: "demo",
-  mediaPackId: "bikini_beach_01",
+  mediaPackId: "asia_glam_01",
 };
 
 export function buildPaywallTiers(hostName: string): WelcomePaywallTier[] {

@@ -1,14 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { BadgeCheck, Crown, Globe2, Phone, PhoneOff, Sparkles } from "lucide-react";
 import type { WelcomePushHost } from "@/lib/welcomePush/config";
 
 /**
- * Full-screen incoming call lure — looping premium video background
- * with matching glamorous host thumbnail overlay.
+ * Full-screen incoming call lure —
+ * girl still (Ken Burns) + portrait waiting video on top.
  */
 export function IncomingCallLure({
   host,
@@ -22,21 +22,24 @@ export function IncomingCallLure({
   onReject: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoOk, setVideoOk] = useState(Boolean(host.ring_video_url));
+
+  useEffect(() => {
+    setVideoOk(Boolean(host.ring_video_url));
+  }, [host.ring_video_url]);
 
   useEffect(() => {
     const el = videoRef.current;
-    if (!el) return;
+    if (!el || !videoOk) return;
     el.muted = true;
     el.playsInline = true;
     const play = () => {
-      void el.play().catch(() => {
-        /* autoplay policies — poster still shows */
-      });
+      void el.play().catch(() => setVideoOk(false));
     };
     play();
     el.addEventListener("loadeddata", play);
     return () => el.removeEventListener("loadeddata", play);
-  }, [host.ring_video_url]);
+  }, [host.ring_video_url, videoOk]);
 
   return (
     <motion.div
@@ -46,16 +49,28 @@ export function IncomingCallLure({
       exit={{ opacity: 0, y: 16, scale: 0.98 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
     >
-      {/* Full-screen looping ring video */}
+      {/* Always show glamorous girl still — never a city crowd */}
       <motion.div
         className="absolute inset-0"
-        initial={{ scale: 1.06 }}
-        animate={{ scale: 1 }}
-        transition={{ duration: 1.15, ease: "easeOut" }}
+        initial={{ scale: 1.08 }}
+        animate={{ scale: 1.18 }}
+        transition={{ duration: 14, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
       >
+        <Image
+          src={host.avatar}
+          alt=""
+          fill
+          priority
+          className="object-cover object-top"
+          sizes="430px"
+        />
+      </motion.div>
+
+      {/* Portrait waiting video (fades in when healthy) */}
+      {videoOk && host.ring_video_url ? (
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover object-top"
           src={host.ring_video_url}
           poster={host.avatar}
           autoPlay
@@ -64,18 +79,11 @@ export function IncomingCallLure({
           playsInline
           preload="auto"
           aria-hidden
+          onError={() => setVideoOk(false)}
         />
-        {/* Fallback still if video stalls */}
-        <Image
-          src={host.avatar}
-          alt=""
-          fill
-          priority
-          className="object-cover opacity-0"
-          aria-hidden
-        />
-      </motion.div>
-      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-[#06040b]/40 to-[#06040b]/92" />
+      ) : null}
+
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-[#06040b]/35 to-[#06040b]/92" />
 
       <motion.div
         aria-hidden

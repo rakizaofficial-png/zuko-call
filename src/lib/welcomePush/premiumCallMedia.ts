@@ -1,6 +1,5 @@
 /**
- * Paired premium ring-loop videos + full-body glamorous female thumbnails.
- * Mobile-first: clips chosen for object-cover on phone screens (~30s fake call).
+ * Paired premium ring videos + glamorous woman thumbnails for mobile fake calls.
  */
 
 import {
@@ -11,19 +10,18 @@ import {
 
 export type PremiumCallMediaPack = {
   id: string;
-  /** Full-view glamorous still (not tight face crop) */
   avatar: string;
-  /** Short loop for ringing background */
   ringVideo: string;
-  /** Clip for accept teaser (plays up to 30s) */
   teaserVideo: string;
-  vibe: "beach" | "pool" | "fashion" | "nightlife" | "glam" | "selfie";
+  vibe: "glam" | "selfie" | "fashion" | "soft" | "beach" | "pool" | "nightlife";
+  region?: "asian" | "indian" | "pakistani" | "global";
 };
 
 export const PREMIUM_CALL_MEDIA: readonly PremiumCallMediaPack[] =
   MOBILE_FAKE_CALL_CLIPS.map((c) => ({
     id: c.id,
     vibe: c.vibe,
+    region: c.region,
     avatar: c.poster,
     ringVideo: c.videoUrl,
     teaserVideo: c.videoUrl,
@@ -34,6 +32,7 @@ export function pickPremiumCallMedia(index = 0): PremiumCallMediaPack {
   return {
     id: c.id,
     vibe: c.vibe,
+    region: c.region,
     avatar: c.poster,
     ringVideo: c.videoUrl,
     teaserVideo: c.videoUrl,
@@ -43,15 +42,20 @@ export function pickPremiumCallMedia(index = 0): PremiumCallMediaPack {
 export function pickRandomPremiumCallMedia(
   avoidIds: string[] = [],
 ): PremiumCallMediaPack {
-  const c = pickRandomMobileFakeCallClip(avoidIds);
+  // Bias toward Asian / Indian / Pakistani packs for ring backgrounds
+  const c = pickRandomMobileFakeCallClip(avoidIds, [
+    "asian",
+    "indian",
+    "pakistani",
+  ]);
   return {
     id: c.id,
     vibe: c.vibe,
+    region: c.region,
     avatar: c.poster,
     ringVideo: c.videoUrl,
     teaserVideo: c.videoUrl,
   };
 }
 
-/** Flat avatar list for generators (always full-view curated) */
 export const PREMIUM_FULLBODY_AVATARS = PREMIUM_CALL_MEDIA.map((p) => p.avatar);

@@ -1,132 +1,121 @@
 /**
- * Mobile-first fake video-call clips (portrait-friendly Mixkit MP4s).
- *
- * NOTE: Sites like vidizzy.com use live peer streams — we cannot scrape or
- * reuse their private WebRTC media. Host your own licensed 30s vertical MP4s
- * via NEXT_PUBLIC_FAKE_CALL_VIDEOS (comma-separated https URLs) or the admin
- * media library (category: teaser / welcome).
+ * Mobile fake-call media — portrait girl clips + South/East Asian glam stills.
+ * Ring backgrounds must be women (never city crowds / traffic).
  */
 
 export type MobileFakeCallClip = {
   id: string;
-  /** Vertical / phone-framed still poster (Unsplash) */
+  region: "asian" | "indian" | "pakistani" | "global";
+  /** Glamorous woman still — used as Ken Burns + video poster */
   poster: string;
-  /** Short MP4 that covers well in object-cover on phones */
+  /** Portrait (9:16) MP4 when available; otherwise empty → Ken Burns only */
   videoUrl: string;
-  vibe: "beach" | "pool" | "fashion" | "nightlife" | "glam" | "selfie";
+  vibe: "glam" | "selfie" | "fashion" | "soft";
 };
 
 const U = (id: string) =>
-  `https://images.unsplash.com/photo-${id}?w=720&h=1280&fit=crop&q=85`;
+  `https://images.unsplash.com/photo-${id}?w=720&h=1280&fit=crop&q=85&crop=faces`;
 
-/** Mixkit 720p — works as object-cover on mobile */
-const M = (id: number) =>
-  `https://assets.mixkit.co/videos/${id}/${id}-720.mp4`;
+/** Verified portrait Pexels files (720×1280) — woman on camera */
+const PEXELS_PORTRAIT = {
+  waiting_01:
+    "https://videos.pexels.com/video-files/2499611/2499611-hd_720_1280_30fps.mp4",
+  waiting_02:
+    "https://videos.pexels.com/video-files/6010878/6010878-hd_720_1280_30fps.mp4",
+} as const;
 
 /**
- * Curated mobile clips for fake ringing + 30s accepted “live” preview.
- * Prefer selfie / mid-shot aesthetics that fill a phone screen.
+ * Curated “waiting for you” packs — Asian / Indian / Pakistani aesthetic posters
+ * paired with portrait waiting videos (object-cover on phones).
  */
 export const MOBILE_FAKE_CALL_CLIPS: readonly MobileFakeCallClip[] = [
   {
-    id: "m_beach_01",
-    vibe: "beach",
-    poster: U("1496440737103-cd596325d314"),
-    videoUrl: M(1215),
+    id: "asia_glam_01",
+    region: "asian",
+    vibe: "glam",
+    poster: U("1531746020798-e6953c440e19"),
+    videoUrl: PEXELS_PORTRAIT.waiting_01,
   },
   {
-    id: "m_pool_01",
-    vibe: "pool",
-    poster: U("1529626455594-4ff0802cfb7e"),
-    videoUrl: M(4154),
+    id: "asia_soft_01",
+    region: "asian",
+    vibe: "soft",
+    poster: U("1589156280159-276898a88479"),
+    videoUrl: PEXELS_PORTRAIT.waiting_02,
   },
   {
-    id: "m_fashion_01",
+    id: "asia_fashion_01",
+    region: "asian",
     vibe: "fashion",
-    poster: U("1515886657613-9f3515b0c78f"),
-    videoUrl: M(39880),
+    poster: U("1517841905240-472988babdf9"),
+    videoUrl: PEXELS_PORTRAIT.waiting_01,
   },
   {
-    id: "m_neon_01",
-    vibe: "nightlife",
-    poster: U("1516726817505-f5ed825624d8"),
-    videoUrl: M(1232),
-  },
-  {
-    id: "m_walk_01",
-    vibe: "beach",
-    poster: U("1503104834685-7205e8607eb9"),
-    videoUrl: M(3986),
-  },
-  {
-    id: "m_shore_01",
-    vibe: "beach",
-    poster: U("1469334031218-e382a71b716b"),
-    videoUrl: M(2193),
-  },
-  {
-    id: "m_club_01",
-    vibe: "nightlife",
-    poster: U("1524504388940-b1c1722653e1"),
-    videoUrl: M(4271),
-  },
-  {
-    id: "m_glam_01",
+    id: "india_glam_01",
+    region: "indian",
     vibe: "glam",
-    poster: U("1487412720507-e7ab37603c6f"),
-    videoUrl: M(4303),
+    poster: U("1594744803329-e922feee73db"),
+    videoUrl: PEXELS_PORTRAIT.waiting_02,
   },
   {
-    id: "m_breeze_01",
-    vibe: "beach",
-    poster: U("1504703395950-b8917a3b0a4c"),
-    videoUrl: M(3987),
+    id: "india_soft_01",
+    region: "indian",
+    vibe: "soft",
+    poster: U("1573496359142-b8d87734a5a2"),
+    videoUrl: PEXELS_PORTRAIT.waiting_01,
   },
   {
-    id: "m_yoga_01",
-    vibe: "beach",
-    poster: U("1526510747491-58f928ec870f"),
-    videoUrl: M(3988),
-  },
-  {
-    id: "m_balcony_01",
-    vibe: "glam",
-    poster: U("1534528741775-53994a69daeb"),
-    videoUrl: M(4270),
-  },
-  {
-    id: "m_selfie_01",
+    id: "india_selfie_01",
+    region: "indian",
     vibe: "selfie",
-    poster: U("1494790108377-be9c29b29330"),
-    videoUrl: M(3989),
+    poster: U("1544005313-94ddf0286df2"),
+    videoUrl: PEXELS_PORTRAIT.waiting_02,
   },
   {
-    id: "m_city_01",
-    vibe: "fashion",
-    poster: U("1524504388940-b1c1722653e1"),
-    videoUrl: M(3245),
-  },
-  {
-    id: "m_soft_01",
+    id: "pak_glam_01",
+    region: "pakistani",
     vibe: "glam",
-    poster: U("1516726817505-f5ed825624d8"),
-    videoUrl: M(3451),
+    poster: U("1524504388940-b1c1722653e1"),
+    videoUrl: PEXELS_PORTRAIT.waiting_01,
   },
   {
-    id: "m_glow_01",
-    vibe: "nightlife",
+    id: "pak_soft_01",
+    region: "pakistani",
+    vibe: "soft",
     poster: U("1487412720507-e7ab37603c6f"),
-    videoUrl: M(4872),
+    videoUrl: PEXELS_PORTRAIT.waiting_02,
   },
   {
-    id: "m_wave_01",
-    vibe: "beach",
-    poster: U("1503104834685-7205e8607eb9"),
-    videoUrl: M(5335),
+    id: "asia_wait_01",
+    region: "asian",
+    vibe: "selfie",
+    poster: U("1534528741775-53994a69daeb"),
+    videoUrl: PEXELS_PORTRAIT.waiting_01,
+  },
+  {
+    id: "india_wait_01",
+    region: "indian",
+    vibe: "fashion",
+    poster: U("1529626455594-4ff0802cfb7e"),
+    videoUrl: PEXELS_PORTRAIT.waiting_02,
+  },
+  {
+    id: "pak_wait_01",
+    region: "pakistani",
+    vibe: "glam",
+    poster: U("1494790108377-be9c29b29330"),
+    videoUrl: PEXELS_PORTRAIT.waiting_01,
+  },
+  {
+    id: "asia_glow_01",
+    region: "asian",
+    vibe: "glam",
+    poster: U("1502823403499-6ccfcf4fb453"),
+    videoUrl: PEXELS_PORTRAIT.waiting_02,
   },
 ];
 
-/** Optional override: NEXT_PUBLIC_FAKE_CALL_VIDEOS=url1,url2,url3 */
+/** Optional override: NEXT_PUBLIC_FAKE_CALL_VIDEOS=url1,url2 */
 export function envFakeCallVideos(): string[] {
   const raw = (process.env.NEXT_PUBLIC_FAKE_CALL_VIDEOS || "").trim();
   if (!raw) return [];
@@ -140,13 +129,8 @@ export function pickMobileFakeCallClip(index = 0): MobileFakeCallClip {
   const env = envFakeCallVideos();
   if (env.length) {
     const i = ((index % env.length) + env.length) % env.length;
-    const url = env[i]!;
-    return {
-      id: `env_${i}`,
-      vibe: "glam",
-      poster: MOBILE_FAKE_CALL_CLIPS[i % MOBILE_FAKE_CALL_CLIPS.length]!.poster,
-      videoUrl: url,
-    };
+    const base = MOBILE_FAKE_CALL_CLIPS[i % MOBILE_FAKE_CALL_CLIPS.length]!;
+    return { ...base, id: `env_${i}`, videoUrl: env[i]! };
   }
   const i =
     ((index % MOBILE_FAKE_CALL_CLIPS.length) + MOBILE_FAKE_CALL_CLIPS.length) %
@@ -156,6 +140,7 @@ export function pickMobileFakeCallClip(index = 0): MobileFakeCallClip {
 
 export function pickRandomMobileFakeCallClip(
   avoidIds: string[] = [],
+  preferRegions?: Array<MobileFakeCallClip["region"]>,
 ): MobileFakeCallClip {
   const env = envFakeCallVideos();
   if (env.length) {
@@ -164,18 +149,18 @@ export function pickRandomMobileFakeCallClip(
       MOBILE_FAKE_CALL_CLIPS[
         Math.floor(Math.random() * MOBILE_FAKE_CALL_CLIPS.length)
       ]!;
-    return {
-      id: `env_${url.slice(-12)}`,
-      vibe: base.vibe,
-      poster: base.poster,
-      videoUrl: url,
-    };
+    return { ...base, id: `env_${url.slice(-10)}`, videoUrl: url };
+  }
+
+  let pool = [...MOBILE_FAKE_CALL_CLIPS];
+  if (preferRegions?.length) {
+    const preferred = pool.filter((c) => preferRegions.includes(c.region));
+    if (preferred.length) pool = preferred;
   }
   const cool = new Set(avoidIds.slice(0, 6));
-  const fresh = MOBILE_FAKE_CALL_CLIPS.filter((c) => !cool.has(c.id));
-  const pool = fresh.length ? fresh : MOBILE_FAKE_CALL_CLIPS;
-  return pool[Math.floor(Math.random() * pool.length)]!;
+  const fresh = pool.filter((c) => !cool.has(c.id));
+  const finalPool = fresh.length ? fresh : pool;
+  return finalPool[Math.floor(Math.random() * finalPool.length)]!;
 }
 
-/** Fake-call preview length — 30 seconds then paywall / loop */
 export const FAKE_CALL_PREVIEW_MS = 30_000;
