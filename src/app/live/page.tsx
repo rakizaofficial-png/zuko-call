@@ -74,9 +74,15 @@ export default function LivePage() {
 
         const hosts = hostList.filter((h) => h.isOnline || h.isLive);
         const rooms = Array.isArray(roomRes.rooms)
-          ? (roomRes.rooms as LiveRoomRow[]).filter(
-              (r) => r.isLive !== false && String(r.mode || "solo") !== "party",
-            )
+          ? (roomRes.rooms as LiveRoomRow[]).filter((r) => {
+              if (r.isLive === false) return false;
+              if (String(r.mode || "solo") === "party") return false;
+              const host = hosts.find((h) => h.id === r.hostId);
+              // Drop rooms whose host is offline / not in presence
+              if (r.hostId && !host) return false;
+              if (host && !host.isOnline && !host.isLive) return false;
+              return true;
+            })
           : [];
 
         let next: Card[] = [];

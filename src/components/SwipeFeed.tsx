@@ -84,7 +84,11 @@ export function SwipeFeed() {
   const load = useCallback(async () => {
     try {
       const hosts = await fetchLiveHosts();
-      setItems(hosts.map((h) => ({ host: h })));
+      setItems(
+        hosts
+          .filter((h) => h.isOnline || h.isLive)
+          .map((h) => ({ host: h })),
+      );
     } catch {
       setItems([]);
     }

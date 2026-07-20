@@ -120,12 +120,10 @@ function enrichLive(h: LiveHost, i: number): DiscoverHost {
 }
 
 export function mergeDiscoverHosts(live: LiveHost[]): DiscoverHost[] {
-  const fromLive = live.map(enrichLive);
-  const liveIds = new Set(fromLive.map((h) => h.id));
-  const fromCatalog = creators
-    .map(enrichCreator)
-    .filter((c) => !liveIds.has(c.id));
-  return [...fromLive, ...fromCatalog];
+  // Only real online/live API hosts — never pad with offline catalog stubs
+  return live
+    .filter((h) => h.isOnline || h.isLive)
+    .map(enrichLive);
 }
 
 export function filterHosts(
@@ -192,7 +190,13 @@ export function hostFromId(id: string, live: LiveHost[] = []): DiscoverHost {
   const merged = mergeDiscoverHosts(live);
   const hit = merged.find((h) => h.id === id);
   if (hit) return hit;
+  // Profile deep-link fallback — mark offline so lists stay empty
   const seed = hash(id);
+  const catalog = creators.find((c) => c.id === id);
+  if (catalog) {
+    const enriched = enrichCreator(catalog);
+    return { ...enriched, online: false, live: false, recentlyActive: false };
+  }
   return {
     id,
     name: "Host",
@@ -204,15 +208,15 @@ export function hostFromId(id: string, live: LiveHost[] = []): DiscoverHost {
     callRate: 45,
     followers: 1200,
     verified: true,
-    online: true,
+    online: false,
     live: false,
     onCall: false,
     tags: ["Chat", "Call"],
-    bio: "Let's talk — tap Message or Call.",
+    bio: "Host is offline right now.",
     isNew: false,
-    trendingScore: 1000,
+    trendingScore: 0,
     nearby: false,
-    recentlyActive: true,
+    recentlyActive: false,
     source: "live",
     gender: "female",
     age: 22 + (seed % 6),
