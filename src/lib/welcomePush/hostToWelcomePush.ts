@@ -42,7 +42,7 @@ export function discoverHostToWelcomePush(
     isVip: true,
     isVerified: Boolean(host.verified),
     isOnline: true,
-    durationPreview: "a few minutes",
+    durationPreview: "30 sec free",
     message: `${displayName.split(" ")[0]}, I'm free right now — video call?`,
     messageId: `profile_${host.id}_${Date.now()}`,
     source: "live",
