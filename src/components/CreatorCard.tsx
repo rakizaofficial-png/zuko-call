@@ -64,7 +64,7 @@ export function CreatorCard({
             </Link>
           ) : (
             <Link
-              href={`/call/${creator.id}`}
+              href={`/call/${creator.id}?live=1`}
               className="flex flex-1 items-center justify-center gap-1 rounded-full bg-sand py-2 text-xs font-bold text-ink"
             >
               <Video className="h-3.5 w-3.5" /> Call · {creator.callRate}/min

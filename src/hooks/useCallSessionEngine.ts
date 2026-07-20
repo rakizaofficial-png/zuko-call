@@ -5,6 +5,7 @@ import {
   createCall,
   endCall as endBridgeCall,
   fetchCallToken,
+  fetchHostProfile,
   getCall,
   waitForAccept,
   type BridgeCall,
@@ -166,13 +167,18 @@ export function useCallSessionEngine(opts: {
         setState("ROUTING");
         setStatusText("Finding the best connection…");
 
-        // Prefer server action when available; fall back to client router
-        let decision = await routeOneToOneCall(hostId);
+        // Prefer live Agora for real hosts — never silently swap to AI clips
+        let decision = await routeOneToOneCall(hostId, {
+          preferLive: preferLiveBridge || !/^ai[_-]/i.test(hostId),
+        });
         try {
           const res = await fetch("/api/call-route", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ hostId }),
+            body: JSON.stringify({
+              hostId,
+              preferLive: preferLiveBridge || !/^ai[_-]/i.test(hostId),
+            }),
           });
           if (res.ok) {
             const data = (await res.json()) as {
@@ -184,14 +190,39 @@ export function useCallSessionEngine(opts: {
           /* client routeCall already computed */
         }
 
+        // Hard guard: never AI-convert an explicit live host call
+        if (
+          (preferLiveBridge || !/^ai[_-]/i.test(hostId)) &&
+          decision.transport === "ai_prerecorded"
+        ) {
+          decision = {
+            transport: "agora_live",
+            reason: "Forced live bridge for user-selected host",
+            realHostsOnline: decision.realHostsOnline,
+            aiHost: null,
+            liveHostId: hostId,
+          };
+        }
+
         if (cancelledRef.current) return;
 
         // --- AGORA LIVE PATH ---
         if (decision.transport === "agora_live" && decision.liveHostId) {
           setTransport("agora_live");
           const hosts = await fetchLiveHosts();
-          const host = hosts.find((h) => h.id === decision.liveHostId);
-          if (!host) throw new Error("Host went offline during handshake");
+          let host =
+            hosts.find((h) => h.id === decision.liveHostId) ||
+            (await fetchHostProfile(decision.liveHostId));
+          if (!host) {
+            host = {
+              id: decision.liveHostId,
+              name: "Host",
+              ratePerMinute: 80,
+              isOnline: true,
+              isLive: false,
+              isOnCall: false,
+            };
+          }
           if (cancelledRef.current) return;
           setLiveHost(host);
 

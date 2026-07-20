@@ -175,7 +175,7 @@ export default function ChatThreadPage({
         </Link>
         <WalletDiamond compact />
         <Link
-          href={`/call/${encodeURIComponent(hostMeta.id || id)}`}
+          href={`/call/${encodeURIComponent(hostMeta.id || id)}?live=1`}
           className="rounded-full bg-[#ff9f1a] p-2.5"
         >
           <Video className="h-4 w-4 text-black" />

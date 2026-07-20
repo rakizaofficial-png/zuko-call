@@ -35,7 +35,7 @@ export function HostGridCard({
   const callHref =
     mode === "watch" || host.live
       ? `/live/${encodeURIComponent(host.id)}`
-      : `/call/${encodeURIComponent(host.id)}${host.source === "live" ? "?live=1" : ""}`;
+      : `/call/${encodeURIComponent(host.id)}?live=1`;
 
   const openChat = (e: MouseEvent) => {
     e.preventDefault();

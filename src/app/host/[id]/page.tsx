@@ -253,7 +253,7 @@ export default function HostProfilePage({
             href={
               host.live
                 ? `/live/${encodeURIComponent(host.id)}`
-                : `/call/${encodeURIComponent(host.id)}${host.source === "live" ? "?live=1" : ""}`
+                : `/call/${encodeURIComponent(host.id)}?live=1`
             }
             className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#ff9f1a] py-3.5 text-sm font-bold text-black"
           >

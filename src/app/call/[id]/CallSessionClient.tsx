@@ -46,7 +46,8 @@ export default function CallSessionClient({
   const { id } = use(params);
   const search = useSearchParams();
   const router = useRouter();
-  const preferLiveBridge = search.get("live") === "1";
+  const preferLiveBridge =
+    search.get("live") !== "0" && !/^ai[_-]/i.test(id);
   const isBlur = search.get("blur") === "1";
   const trialParam = search.get("trial") === "1";
   const {

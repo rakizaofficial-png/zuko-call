@@ -9,12 +9,17 @@ import { listAiHosts } from "@/lib/aiHosts/catalog";
  */
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { hostId?: string };
+    const body = (await req.json()) as {
+      hostId?: string;
+      preferLive?: boolean;
+    };
     const hostId = body.hostId?.trim();
     if (!hostId) {
       return NextResponse.json({ error: "hostId required" }, { status: 400 });
     }
-    const decision = await routeOneToOneCall(hostId);
+    const decision = await routeOneToOneCall(hostId, {
+      preferLive: body.preferLive !== false && !/^ai[_-]/i.test(hostId),
+    });
     return NextResponse.json({ ok: true, decision });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Routing failed";

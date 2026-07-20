@@ -53,6 +53,25 @@ export async function fetchLiveHosts(opts?: {
   return data.hosts ?? [];
 }
 
+/** Single host profile (works even if briefly offline) */
+export async function fetchHostProfile(
+  hostId: string,
+): Promise<LiveHost | null> {
+  const id = hostId.trim();
+  if (!id) return null;
+  try {
+    const res = await fetch(
+      `${requireApiBase()}/hosts/${encodeURIComponent(id)}/profile`,
+      { cache: "no-store" },
+    );
+    if (res.status === 404) return null;
+    const data = await parse<{ host: LiveHost }>(res);
+    return data.host ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createCall(input: {
   hostId: string;
   userId: string;
