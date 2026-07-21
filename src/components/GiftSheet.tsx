@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
-import { gifts } from "@/lib/data";
+import { Sparkles, X } from "lucide-react";
+import { gifts, type Gift } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { getDeviceUserId } from "@/lib/walletApi";
 import { requireApiBase } from "@/config/apiConfig";
 import { getRealtimeClient } from "@/lib/realtime/websocket";
+
+function isCinematic(g: Gift) {
+  return g.tier === "cinematic" || g.coins >= 250;
+}
 
 export function GiftSheet({
   open,
@@ -26,9 +30,13 @@ export function GiftSheet({
 }) {
   const { spend, syncWallet, pushToast, displayName, userId } = useApp();
   const [sending, setSending] = useState<string | null>(null);
+  const [cinematic, setCinematic] = useState<Gift | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const send = async (id: string, coins: number, emoji: string, name: string) => {
+  const basic = gifts.filter((g) => !isCinematic(g));
+  const adult = gifts.filter((g) => isCinematic(g));
+
+  const send = async (g: Gift) => {
     if (busy) return;
     const me = getDeviceUserId() || userId;
     if (hostId && me && me === hostId) {
@@ -48,7 +56,7 @@ export function GiftSheet({
             userId: me,
             userName: displayName || "Zuko Fan",
             hostId,
-            giftId: id,
+            giftId: g.id,
             roomId,
             callId,
           }),
@@ -60,29 +68,36 @@ export function GiftSheet({
           getRealtimeClient(me).sendGift({
             roomId,
             toHostId: hostId,
-            giftId: id,
-            coins,
-            label: name,
+            giftId: g.id,
+            coins: g.coins,
+            label: g.name,
           });
         } catch {
-          // optional WS mirror
+          /* optional WS mirror */
         }
-      } else if (!spend(coins, `Sent ${name} ${emoji}`)) {
+      } else if (!spend(g.coins, `Sent ${g.name} ${g.emoji}`)) {
         setBusy(false);
         return;
       }
 
-      setSending(emoji);
-      onSent?.(emoji);
-      setTimeout(() => {
-        setSending(null);
-        onClose();
-        setBusy(false);
-      }, 700);
+      onSent?.(g.emoji);
+      if (isCinematic(g)) {
+        setCinematic(g);
+        setTimeout(() => {
+          setCinematic(null);
+          onClose();
+          setBusy(false);
+        }, 2800);
+      } else {
+        setSending(g.emoji);
+        setTimeout(() => {
+          setSending(null);
+          onClose();
+          setBusy(false);
+        }, 700);
+      }
     } catch (e) {
-      pushToast?.(
-        e instanceof Error ? e.message : "Could not send gift",
-      );
+      pushToast?.(e instanceof Error ? e.message : "Could not send gift");
       setBusy(false);
     }
   };
@@ -111,7 +126,9 @@ export function GiftSheet({
               <div>
                 <h3 className="font-display text-lg font-bold">Send a gift</h3>
                 <p className="text-xs text-muted">
-                  {hostId ? "Goes to the host · coins deducted" : "Make the moment unforgettable"}
+                  {hostId
+                    ? "Goes to the host · coins deducted"
+                    : "Make the moment unforgettable"}
                 </p>
               </div>
               <button
@@ -122,13 +139,17 @@ export function GiftSheet({
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">
+              Classic
+            </p>
             <div className="grid grid-cols-3 gap-2.5">
-              {gifts.map((g) => (
+              {basic.map((g) => (
                 <button
                   key={g.id}
                   type="button"
                   disabled={busy}
-                  onClick={() => void send(g.id, g.coins, g.emoji, g.name)}
+                  onClick={() => void send(g)}
                   className="flex flex-col items-center gap-1 rounded-2xl border border-line bg-ink-3 px-2 py-3 transition active:scale-95 disabled:opacity-50"
                 >
                   <span className="text-2xl">{g.emoji}</span>
@@ -137,12 +158,75 @@ export function GiftSheet({
                 </button>
               ))}
             </div>
+
+            <p className="mb-2 mt-4 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-coral">
+              <Sparkles className="h-3 w-3" /> Adult · cinematic (250+)
+            </p>
+            <div className="grid grid-cols-3 gap-2.5">
+              {adult.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void send(g)}
+                  className="relative flex flex-col items-center gap-1 overflow-hidden rounded-2xl border border-coral/40 bg-gradient-to-b from-coral/20 to-ink-3 px-2 py-3 transition active:scale-95 disabled:opacity-50"
+                >
+                  <span className="absolute right-1 top-1 rounded-full bg-coral px-1 text-[8px] font-bold text-white">
+                    BIG
+                  </span>
+                  <span className="text-2xl">{g.emoji}</span>
+                  <span className="text-center text-[11px] font-semibold leading-tight">
+                    {g.name}
+                  </span>
+                  <span className="text-[10px] font-bold text-gold">
+                    {g.coins} coins
+                  </span>
+                </button>
+              ))}
+            </div>
+
             {sending && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <span className="gift-float text-5xl">{sending}</span>
               </div>
             )}
           </motion.div>
+
+          <AnimatePresence>
+            {cinematic && (
+              <motion.div
+                className="pointer-events-none fixed inset-0 z-[90] flex items-center justify-center bg-black/70"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <motion.div
+                  className="flex flex-col items-center gap-3"
+                  initial={{ scale: 0.4, opacity: 0, y: 40 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 1.2, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 220, damping: 16 }}
+                >
+                  <motion.span
+                    className="text-8xl drop-shadow-[0_0_40px_rgba(255,80,120,0.8)]"
+                    animate={{
+                      scale: [1, 1.15, 1],
+                      rotate: [0, -6, 6, 0],
+                    }}
+                    transition={{ duration: 1.6, repeat: 1 }}
+                  >
+                    {cinematic.emoji}
+                  </motion.span>
+                  <p className="font-display text-2xl font-extrabold text-white">
+                    {cinematic.name}
+                  </p>
+                  <p className="rounded-full border border-gold/50 bg-gold/20 px-3 py-1 text-xs font-bold text-gold">
+                    Cinematic gift · {cinematic.coins} coins
+                  </p>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
     </AnimatePresence>

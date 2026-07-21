@@ -60,6 +60,14 @@ export const IAP_PRODUCTS: IapProduct[] = [
     priceLabel: "$19.99",
     title: "Elite 2500",
   },
+  {
+    productId: "luma_coins_4000",
+    platformSku: { google: "luma_coins_4000", apple: "luma_coins_4000" },
+    coins: 4000,
+    bonusCoins: 250,
+    priceLabel: "$29.99",
+    title: "Whale 4250",
+  },
 ];
 
 export function getIapProduct(productId: string) {

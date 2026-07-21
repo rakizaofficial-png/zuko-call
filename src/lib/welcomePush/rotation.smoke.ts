@@ -50,9 +50,14 @@ function main() {
     "Repeat delay range invalid",
   );
   assert(
-    WELCOME_PUSH_CONFIG.postRechargeDelayMinMs === 5_000 &&
-      WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs === 9_000,
-    "Post-recharge autopush must be 5–9 seconds",
+    WELCOME_PUSH_CONFIG.postRechargeDelayMinMs === 60_000 &&
+      WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs === 120_000,
+    "Post-recharge autopush must be 1–2 minutes",
+  );
+  assert(
+    WELCOME_PUSH_CONFIG.launchDelayMinMs === 60_000 &&
+      WELCOME_PUSH_CONFIG.launchDelayMaxMs === 120_000,
+    "Launch autopush must be 1–2 minutes",
   );
   assert(
     WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs >

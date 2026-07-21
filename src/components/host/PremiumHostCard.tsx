@@ -11,8 +11,9 @@ import { HostAvatarImg } from "@/components/host/HostAvatarImg";
 
 type Mode = "call" | "watch";
 
-function statusLabel(host: DiscoverHost, mode: Mode) {
-  if (mode === "watch" || host.live) return { text: "Live", tone: "live" as const };
+function statusLabel(host: DiscoverHost) {
+  // Always reflect real presence — Live / Busy / Online / Offline
+  if (host.live) return { text: "Live", tone: "live" as const };
   if (host.onCall) return { text: "Busy", tone: "busy" as const };
   if (host.online) return { text: "Online", tone: "online" as const };
   return { text: "Offline", tone: "off" as const };
@@ -29,7 +30,7 @@ export function HostGridCard({
   index?: number;
 }) {
   const router = useRouter();
-  const status = statusLabel(host, mode);
+  const status = statusLabel(host);
   const busy = mode === "call" && host.onCall;
   const profileHref = `/host/${encodeURIComponent(host.id)}`;
   const callHref =

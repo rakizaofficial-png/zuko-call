@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock3, Sparkles, Zap } from "lucide-react";
+import { Clock3, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import {
   buildPaywallTiers,
   type WelcomePushHost,
@@ -10,8 +11,8 @@ import { purchaseCoins } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 
 /**
- * High-conversion recharge paywall — opens the moment Answer hits 0 coins.
- * Host profile photo stays behind the sheet as FOMO pressure (no video).
+ * High-conversion recharge paywall — opens when free preview ends.
+ * Includes explicit "Recharge later" dismiss.
  */
 export function RechargePaywallSheet({
   open,
@@ -25,6 +26,7 @@ export function RechargePaywallSheet({
   onClose: () => void;
 }) {
   const { userId, pushToast, syncWallet, setPremium } = useApp();
+  const [busy, setBusy] = useState(false);
   const tiers = buildPaywallTiers(host.name);
 
   const buy = async (tier: (typeof tiers)[number]) => {
@@ -38,7 +40,8 @@ export function RechargePaywallSheet({
       boost_300: "luma_coins_500",
     };
     const productId = productMap[tier.id] || "luma_coins_50";
-    pushToast("Opening store checkout…");
+    setBusy(true);
+    pushToast("Opening Google Play checkout…");
     try {
       const result = await purchaseCoins({ userId, productId });
       if ("redirected" in result) return;
@@ -48,6 +51,8 @@ export function RechargePaywallSheet({
       onClose();
     } catch (e: unknown) {
       pushToast(e instanceof Error ? e.message : "Purchase failed");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -63,7 +68,6 @@ export function RechargePaywallSheet({
     <AnimatePresence>
       {open && (
         <>
-          {/* Host profile backdrop */}
           <motion.div
             className="fixed inset-0 z-[110] mx-auto max-w-[430px] overflow-hidden"
             initial={{ opacity: 0 }}
@@ -94,7 +98,7 @@ export function RechargePaywallSheet({
                 </p>
                 <h2 className="mt-1 font-display text-[1.35rem] font-extrabold leading-snug text-sand">
                   Preview ended — recharge to keep talking with {host.name},
-                  or the call will cut.
+                  or recharge later.
                 </h2>
               </div>
             </div>
@@ -104,8 +108,8 @@ export function RechargePaywallSheet({
                 <Clock3 className="h-3.5 w-3.5" />
                 Offer expires in {String(offerLeft).padStart(2, "0")}s
               </span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-gold/80">
-                FOMO deal
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gold/80">
+                <ShieldCheck className="h-3 w-3" /> Google Play
               </span>
             </div>
 
@@ -114,11 +118,12 @@ export function RechargePaywallSheet({
                 <motion.button
                   key={tier.id}
                   type="button"
+                  disabled={busy}
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.06 * i }}
                   onClick={() => void buy(tier)}
-                  className={`relative flex w-full items-center gap-3 rounded-2xl border px-4 py-4 text-left ${neon(tier.neon)}`}
+                  className={`relative flex w-full items-center gap-3 rounded-2xl border px-4 py-4 text-left disabled:opacity-60 ${neon(tier.neon)}`}
                 >
                   {tier.popular && (
                     <span className="absolute -top-2 right-4 rounded-full bg-coral px-2 py-0.5 text-[9px] font-bold text-white">
@@ -146,10 +151,13 @@ export function RechargePaywallSheet({
             <button
               type="button"
               onClick={onClose}
-              className="mt-4 w-full py-2 text-center text-xs font-semibold text-white/45"
+              className="mt-4 w-full rounded-2xl border border-white/15 bg-white/5 py-3 text-center text-sm font-bold text-white/80"
             >
-              End call · no recharge
+              Recharge later
             </button>
+            <p className="mt-2 pb-1 text-center text-[10px] text-white/40">
+              End call for now · next invite in 1–2 minutes
+            </p>
           </motion.div>
         </>
       )}
