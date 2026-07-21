@@ -1,5 +1,14 @@
 import { StatusBar } from "expo-status-bar";
-import { Component, useCallback, useEffect, useMemo, useState } from "react";
+import * as FileSystem from "expo-file-system";
+import {
+  Component,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -10,21 +19,41 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
-import * as ScreenCapture from "expo-screen-capture";
 
 /**
- * Expo shell — loads the production Luma Next.js user app in a WebView.
- *
- *   cd expo-app && npm install && npx expo start
- *   eas build --platform android --profile preview
+ * Fail-safe Expo shell — loads Luma web app in a WebView.
+ * NO native FLAG_SECURE / ScreenCapture (those caused Android force-closes).
  */
 const LUMA_URL =
   process.env.EXPO_PUBLIC_LUMA_WEB_URL || "https://luma-user.onrender.com";
 
+const TRANSIENT_HTTP = new Set([502, 503, 504]);
+const MAX_AUTO_RETRIES = 4;
+const INSTALL_FILE = `${FileSystem.documentDirectory || ""}luma_install_id.txt`;
+
+async function loadOrCreateInstallId(): Promise<string> {
+  try {
+    const info = await FileSystem.getInfoAsync(INSTALL_FILE);
+    if (info.exists) {
+      const id = (await FileSystem.readAsStringAsync(INSTALL_FILE)).trim();
+      if (id.length > 8) return id;
+    }
+  } catch {
+    /* create below */
+  }
+  const id = `android_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    await FileSystem.writeAsStringAsync(INSTALL_FILE, id);
+  } catch {
+    /* ephemeral fallback */
+  }
+  return id;
+}
+
 type BoundaryState = { error: Error | null };
 
 class AppErrorBoundary extends Component<
-  { children: React.ReactNode; onReset?: () => void },
+  { children: ReactNode; onReset?: () => void },
   BoundaryState
 > {
   state: BoundaryState = { error: null };
@@ -57,36 +86,113 @@ class AppErrorBoundary extends Component<
   }
 }
 
+/** Ping Render so free-tier cold starts begin before WebView mounts. */
+async function wakeLuma(url: string, timeoutMs = 90_000): Promise<boolean> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      signal: ctrl.signal,
+      headers: { Accept: "text/html" },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 function LumaWebShell() {
+  const [ready, setReady] = useState(false);
+  const [waking, setWaking] = useState(true);
   const [webKey, setWebKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryHint, setRetryHint] = useState("");
+  const [installId, setInstallId] = useState<string>("");
+  const autoRetries = useRef(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstLoadDone = useRef(false);
 
   useEffect(() => {
+    void loadOrCreateInstallId().then(setInstallId);
+  }, []);
+
+  // Fail-safe first paint, then wake Render before mounting WebView
+  useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const ok = await ScreenCapture.isAvailableAsync();
-        if (!cancelled && ok) {
-          await ScreenCapture.preventScreenCaptureAsync("luma");
-        }
-      } catch {
-        /* never crash the shell for FlagSecure */
-      }
-    })();
+    const boot = async () => {
+      setReady(true);
+      setWaking(true);
+      setRetryHint("Waking Luma server…");
+      firstLoadDone.current = false;
+      const ok = await wakeLuma(LUMA_URL);
+      if (cancelled) return;
+      setWaking(false);
+      setRetryHint(ok ? "" : "Server still waking — loading anyway…");
+      setWebKey((k) => k + 1);
+    };
+    void boot();
     return () => {
       cancelled = true;
-      void ScreenCapture.allowScreenCaptureAsync("luma").catch(() => undefined);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
     };
   }, []);
 
   const reload = useCallback(() => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
     setLoadError(null);
     setLoading(true);
+    setRetryHint("");
+    autoRetries.current = 0;
+    firstLoadDone.current = false;
     setWebKey((k) => k + 1);
   }, []);
 
+  const scheduleAutoRetry = useCallback((statusCode: number) => {
+    if (autoRetries.current >= MAX_AUTO_RETRIES) {
+      setLoadError(
+        `Server error ${statusCode} — Render may still be starting. Tap Retry.`,
+      );
+      setLoading(false);
+      return;
+    }
+    autoRetries.current += 1;
+    const attempt = autoRetries.current;
+    const delay = Math.min(12_000, 2500 * attempt);
+    setLoading(true);
+    setLoadError(null);
+    firstLoadDone.current = false;
+    setRetryHint(
+      `Server waking (${attempt}/${MAX_AUTO_RETRIES})… retry in ${Math.round(delay / 1000)}s`,
+    );
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    retryTimer.current = setTimeout(() => {
+      setWebKey((k) => k + 1);
+    }, delay);
+  }, []);
+
   const source = useMemo(() => ({ uri: LUMA_URL }), []);
+  const showOverlay = waking || (loading && !firstLoadDone.current);
+  const installBridge = useMemo(() => {
+    if (!installId) return undefined;
+    const safe = JSON.stringify(installId);
+    return `window.__LUMA_INSTALL_ID__=${safe};try{localStorage.setItem('luma_install_id_v1',${safe});}catch(e){}true;`;
+  }, [installId]);
+
+  if (!ready) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <StatusBar style="light" />
+        <View style={styles.center}>
+          <ActivityIndicator color="#2ee6c5" size="large" />
+          <Text style={styles.meta}>Starting Luma…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.root}>
@@ -103,49 +209,73 @@ function LumaWebShell() {
           </View>
         ) : (
           <>
-            <WebView
-              key={webKey}
-              source={source}
-              style={styles.webview}
-              onLoadStart={() => {
-                setLoading(true);
-                setLoadError(null);
-              }}
-              onLoadEnd={() => setLoading(false)}
-              onError={(e) => {
-                setLoading(false);
-                setLoadError(
-                  e.nativeEvent?.description || "WebView failed to load",
-                );
-              }}
-              onHttpError={(e) => {
-                if (e.nativeEvent.statusCode >= 500) {
-                  setLoadError(`Server error ${e.nativeEvent.statusCode}`);
-                }
-              }}
-              javaScriptEnabled
-              domStorageEnabled
-              startInLoadingState={false}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              setSupportMultipleWindows={false}
-              originWhitelist={["*"]}
-              mixedContentMode="always"
-              androidLayerType="hardware"
-              nestedScrollEnabled
-              // iOS-only extras — cast keeps Android builds free of crashy prop wiring
-              {...(Platform.OS === "ios"
-                ? ({
-                    allowsBackForwardNavigationGestures: true,
-                    allowsAirPlayForMediaPlayback: true,
-                    mediaCapturePermissionGrantType: "grant",
-                  } as Record<string, unknown>)
-                : {})}
-            />
-            {loading ? (
+            {!waking ? (
+              <WebView
+                key={webKey}
+                source={source}
+                style={styles.webview}
+                injectedJavaScriptBeforeContentLoaded={installBridge}
+                mediaCapturePermissionGrantType="grant"
+                onLoadStart={() => {
+                  // Only block UI on cold/first load — SPA navigations must stay interactive
+                  if (!firstLoadDone.current) {
+                    setLoading(true);
+                    setLoadError(null);
+                  }
+                }}
+                onLoadEnd={() => {
+                  setLoading(false);
+                  setRetryHint("");
+                  autoRetries.current = 0;
+                  firstLoadDone.current = true;
+                }}
+                onError={(e) => {
+                  setLoading(false);
+                  setLoadError(
+                    e.nativeEvent?.description || "WebView failed to load",
+                  );
+                }}
+                onHttpError={(e) => {
+                  const code = e.nativeEvent.statusCode;
+                  if (TRANSIENT_HTTP.has(code)) {
+                    scheduleAutoRetry(code);
+                    return;
+                  }
+                  if (code >= 500) {
+                    setLoading(false);
+                    setLoadError(`Server error ${code}`);
+                  }
+                }}
+                javaScriptEnabled
+                domStorageEnabled
+                allowFileAccess
+                allowUniversalAccessFromFileURLs
+                allowFileAccessFromFileURLs
+                startInLoadingState={false}
+                allowsInlineMediaPlayback
+                mediaPlaybackRequiresUserAction={false}
+                setSupportMultipleWindows={false}
+                originWhitelist={["https://*", "http://*", "file://*"]}
+                mixedContentMode="always"
+                androidLayerType="hardware"
+                nestedScrollEnabled
+                {...(Platform.OS === "ios"
+                  ? ({
+                      allowsBackForwardNavigationGestures: true,
+                      allowsAirPlayForMediaPlayback: true,
+                    } as Record<string, unknown>)
+                  : {
+                      // Android 11–15: WebView gallery <input type=file>
+                      setBuiltInZoomControls: false,
+                    })}
+              />
+            ) : null}
+            {showOverlay ? (
               <View style={styles.loadingOverlay} pointerEvents="none">
                 <ActivityIndicator color="#2ee6c5" size="large" />
-                <Text style={styles.meta}>Opening Luma…</Text>
+                <Text style={styles.meta}>
+                  {retryHint || (waking ? "Waking Luma…" : "Opening Luma…")}
+                </Text>
               </View>
             ) : null}
           </>
