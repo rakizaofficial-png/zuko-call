@@ -313,6 +313,26 @@ export function HomeScreen() {
       </div>
 
       <div className="mt-4">
+        <div className="mb-3 flex gap-2 px-4">
+          <button
+            type="button"
+            onClick={() => setTab("call")}
+            className={`flex-1 rounded-full py-2 text-xs font-bold ${
+              tab === "call" ? "bg-coral text-white" : "bg-white/8 text-white/70"
+            }`}
+          >
+            Online
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("live")}
+            className={`flex-1 rounded-full py-2 text-xs font-bold ${
+              tab === "live" ? "bg-coral text-white" : "bg-white/8 text-white/70"
+            }`}
+          >
+            Live
+          </button>
+        </div>
         {loading ? (
           <HostGridSkeleton count={6} />
         ) : list.length === 0 ? (

@@ -109,6 +109,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       }
       if (!opts.enabled) return;
       if (phaseRef.current !== "IDLE" && phaseRef.current !== "DONE") return;
+      if (coinsRef.current > 0) return;
       setHost(next);
       setStatusLine(pickRandomStatusLine());
       setPhase("INCOMING_CALL");

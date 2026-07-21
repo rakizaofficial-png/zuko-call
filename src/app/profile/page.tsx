@@ -84,6 +84,7 @@ export default function ProfilePage() {
     syncWallet,
     updateDisplayName,
     updateAvatar,
+    uploadGalleryAvatar,
     isPremium,
     engagement,
     vipTier,
@@ -179,7 +180,7 @@ export default function ProfilePage() {
     setSavingAvatar(true);
     try {
       const dataUrl = await fileToSquareDataUrl(file, 256);
-      await updateAvatar(dataUrl);
+      await uploadGalleryAvatar(dataUrl);
       setEditingAvatar(false);
     } catch {
       pushToast("Could not load that photo");

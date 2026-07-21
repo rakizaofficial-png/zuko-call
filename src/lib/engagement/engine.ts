@@ -228,7 +228,7 @@ export function spinLuckyWheel(opts?: {
     xp,
     message:
       coins > 0
-        ? `You won ${prize.coins} coins!`
+        ? `You won ${coins} coins!`
         : "So close — spin again tomorrow",
     prize,
     unlocked: unlocked.unlocked,
@@ -422,7 +422,8 @@ export function spinCoinsRemaining(state: EngagementState): number {
   return Math.max(0, SPIN_TOTAL_COIN_CAP - (state.spinCoinsTotal || 0));
 }
 
-/** Whether the user may spin now: daily limit not hit AND lifetime cap not reached. */
+/** Whether the user may spin without any possible prize exceeding the cap. */
 export function canSpin(state: EngagementState): boolean {
-  return spinsRemaining(state) > 0 && spinCoinsRemaining(state) > 0;
+  const maxPrize = Math.max(...SPIN_PRIZES.map((prize) => prize.coins));
+  return spinsRemaining(state) > 0 && spinCoinsRemaining(state) >= maxPrize;
 }

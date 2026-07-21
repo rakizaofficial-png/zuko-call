@@ -356,7 +356,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               ? e.message
               : "Wallet API unreachable — check NEXT_PUBLIC_API_BASE_URL",
           );
-          setReady(true);
         }
       }
     })();
@@ -452,15 +451,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     try {
       const data = await claimSpinRewardApi();
-      setCoins(data.wallet.coinBalance);
-      setXp(data.wallet.xp);
       const result = spinLuckyWheel({
         coins: data.coins,
         prize: data.prize,
         fromServer: true,
       });
+      const excessCoins = Math.max(0, data.coins - result.coins);
+      setCoins(Math.max(0, data.wallet.coinBalance - excessCoins));
+      setXp(data.wallet.xp);
       setEngagement(result.state);
-      triggerCoinBurst(data.coins);
+      triggerCoinBurst(result.coins);
       pushToast(result.message);
       return result;
     } catch (e) {

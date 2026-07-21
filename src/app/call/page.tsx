@@ -22,7 +22,6 @@ export default function CallLobbyPage() {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
     try {
       const all = await fetchLiveHosts();
       setHosts(mergeDiscoverHosts(all).filter((h) => h.online && !h.live));
@@ -73,7 +72,7 @@ export default function CallLobbyPage() {
         </Link>
       </div>
 
-      {loading && !displayHosts.length ? (
+      {loading ? (
         <HostGridSkeleton />
       ) : displayHosts.length === 0 ? (
         <div className="mx-4 mt-2 rounded-2xl border border-dashed border-line bg-ink-2/60 px-4 py-10 text-center text-sm text-muted">
