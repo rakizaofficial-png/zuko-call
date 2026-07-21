@@ -46,10 +46,6 @@
         "projectId": "72436173-8890-4946-ac8e-dea507f20d95"
       }
     },
-    "owner": "salman112211",
-    "plugins": [
-      "expo-asset",
-      "expo-font"
-    ]
+    "owner": "salman112211"
   }
 }
