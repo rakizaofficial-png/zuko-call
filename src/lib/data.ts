@@ -38,6 +38,9 @@ export type Gift = {
   name: string;
   emoji: string;
   coins: number;
+  /** basic < 250 · cinematic adult gifts start at 250+ */
+  tier?: "basic" | "premium" | "cinematic";
+  adult?: boolean;
 };
 
 export type CoinPack = {
@@ -84,8 +87,8 @@ export const creators: Creator[] = [
     bio: "Dance breaks & late-night stories",
     tags: ["Dance", "Fun"],
     online: true,
-    live: true,
-    viewers: 3201,
+    live: false,
+    viewers: 0,
     callRate: 95,
     rating: 4.8,
     image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&h=800&fit=crop",
@@ -131,7 +134,7 @@ export const creators: Creator[] = [
     age: 26,
     bio: "Stories, style, soft voice notes",
     tags: ["Style", "Chat"],
-    online: false,
+    online: true,
     live: false,
     viewers: 0,
     callRate: 90,
@@ -148,8 +151,8 @@ export const creators: Creator[] = [
     bio: "Guitar loops · sunset moods",
     tags: ["Music", "Live"],
     online: true,
-    live: true,
-    viewers: 2104,
+    live: false,
+    viewers: 0,
     callRate: 100,
     rating: 5.0,
     image: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop",
@@ -200,12 +203,61 @@ export const threads: ChatThread[] = [
 ];
 
 export const gifts: Gift[] = [
-  { id: "rose", name: "Rose", emoji: "🌹", coins: 1 },
-  { id: "heart", name: "Heart", emoji: "💖", coins: 5 },
-  { id: "kiss", name: "Kiss", emoji: "💋", coins: 10 },
-  { id: "star", name: "Star", emoji: "⭐", coins: 20 },
-  { id: "diamond", name: "Diamond", emoji: "💎", coins: 99 },
-  { id: "crown", name: "Crown", emoji: "👑", coins: 199 },
+  { id: "rose", name: "Rose", emoji: "🌹", coins: 1, tier: "basic" },
+  { id: "heart", name: "Heart", emoji: "💖", coins: 5, tier: "basic" },
+  { id: "kiss", name: "Kiss", emoji: "💋", coins: 10, tier: "basic" },
+  { id: "star", name: "Star", emoji: "⭐", coins: 20, tier: "basic" },
+  { id: "diamond", name: "Diamond", emoji: "💎", coins: 99, tier: "premium" },
+  { id: "crown", name: "Crown", emoji: "👑", coins: 199, tier: "premium" },
+  // Cinematic adult gifts (250+ coins) — big full-screen animation
+  {
+    id: "silk_touch",
+    name: "Silk Touch",
+    emoji: "👙",
+    coins: 299,
+    tier: "cinematic",
+    adult: true,
+  },
+  {
+    id: "velvet_night",
+    name: "Velvet Night",
+    emoji: "🔥",
+    coins: 499,
+    tier: "cinematic",
+    adult: true,
+  },
+  {
+    id: "private_dance",
+    name: "Private Dance",
+    emoji: "💃",
+    coins: 799,
+    tier: "cinematic",
+    adult: true,
+  },
+  {
+    id: "cinematic_kiss",
+    name: "Cinematic Kiss",
+    emoji: "😘",
+    coins: 999,
+    tier: "cinematic",
+    adult: true,
+  },
+  {
+    id: "royal_fantasy",
+    name: "Royal Fantasy",
+    emoji: "👸",
+    coins: 1999,
+    tier: "cinematic",
+    adult: true,
+  },
+  {
+    id: "ultimate_desire",
+    name: "Ultimate Desire",
+    emoji: "✨",
+    coins: 4999,
+    tier: "cinematic",
+    adult: true,
+  },
 ];
 
 export const giftTickerLines = [
@@ -226,7 +278,7 @@ export const coinPacks: CoinPack[] = [
 ];
 
 export const dailyTasks: DailyTask[] = [
-  { id: "t1", title: "Open Luma today", reward: 20, done: true, icon: "☀️" },
+  { id: "t1", title: "Open Zuko today", reward: 20, done: true, icon: "☀️" },
   { id: "t2", title: "Watch a live for 2 min", reward: 40, done: false, icon: "📺" },
   { id: "t3", title: "Send a gift", reward: 60, done: false, icon: "🎁" },
   { id: "t4", title: "Start a 1v1 call", reward: 80, done: false, icon: "📹" },
@@ -259,7 +311,7 @@ export function resolveLiveCreator(
     country: fallback?.country || "Global",
     flag: fallback?.flag || "🌐",
     age: fallback?.age || 22,
-    bio: fallback?.bio || "Live now on Luma",
+    bio: fallback?.bio || "Live now on Zuko",
     tags: fallback?.tags || ["Live"],
     online: true,
     live: true,

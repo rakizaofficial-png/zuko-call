@@ -29,7 +29,7 @@ import { useApp } from "@/lib/store";
  *   demo → TEASER (30s free preview) → PAYWALL_BOOST
  *      → recharge OR offer expires / dismiss → call cut (IDLE)
  * Preview length = video length; when the clip ends → PAYWALL_BOOST.
- * Next autopush after paywall is strictly 5–9s later.
+ * Next autopush after paywall / "Recharge later" is 1–2 minutes.
  */
 
 export function useWelcomePushCall(opts: { enabled: boolean }) {
@@ -300,7 +300,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   }, [clearTimers, host.host_id, host.source, router]);
 
   const closePaywall = useCallback(() => {
-    // Dismiss without recharge → cut call; next autopush only 5–9s later
+    // Dismiss without recharge ("Recharge later") → cut call; next in 1–2 min
     clearTimers();
     setPhase("IDLE");
     scheduleNext(nextPostRechargeDelayMs());

@@ -13,7 +13,7 @@ import { ensurePremiumFemalePool } from "@/lib/welcomePush/premiumFemaleGenerato
  * Simulated premium female incoming-call engine.
  * Fires while browsing home/call/match → photo ring (no bg video) → Accept →
  * play preview clip once → when video ends, cut call + recharge popup.
- * Next autopush after paywall is 5–9s later.
+ * Next autopush after paywall / "Recharge later" is 1–2 minutes.
  * Host profile pages use HostProfileAutoCall separately (call from that host).
  */
 export function WelcomePushEngine() {

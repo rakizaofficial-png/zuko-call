@@ -104,9 +104,9 @@ function enrichLive(h: LiveHost, i: number): DiscoverHost {
     callRate: h.ratePerMinute || 80,
     followers: 800 + (seed % 22000),
     verified: true,
-    online: h.isOnline,
-    live: h.isLive,
-    onCall: h.isOnCall,
+    online: Boolean(h.isOnline || h.isLive || h.isOnCall),
+    live: Boolean(h.isLive),
+    onCall: Boolean(h.isOnCall && !h.isLive),
     tags: i % 2 === 0 ? ["Live", "Talk"] : ["Chill", "Music"],
     bio: "Online now · ready for a real conversation",
     isNew: seed % 4 === 0,
@@ -127,17 +127,20 @@ export function mergeDiscoverHosts(live: LiveHost[]): DiscoverHost[] {
 }
 
 /**
- * Catalog hosts presented as online/live so the discovery + matching feeds are
- * never empty or static — used as a rotating fallback when the live API
- * returns few/no hosts. Keeps "fresh faces" on screen for engagement.
+ * Catalog hosts for discovery fallback — keep real Online vs Live flags so
+ * badges stay accurate (Online hosts on Call tab, Live hosts on Live tab).
  */
 export function catalogDiscoverHosts(mode: "call" | "live"): DiscoverHost[] {
-  return creators.map((c) => {
-    const h = enrichCreator(c);
-    return mode === "live"
-      ? { ...h, live: true, online: true, recentlyActive: true }
-      : { ...h, live: false, online: true, onCall: false, recentlyActive: true };
-  });
+  return creators
+    .map(enrichCreator)
+    .filter((h) =>
+      mode === "live" ? h.live === true : h.online === true && !h.live,
+    )
+    .map((h) => ({
+      ...h,
+      recentlyActive: true,
+      source: "catalog" as const,
+    }));
 }
 
 /**
