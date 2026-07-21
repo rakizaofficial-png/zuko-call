@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import type { WelcomePushHost } from "@/lib/welcomePush/config";
@@ -18,11 +18,24 @@ export function TeaserCallPlayer({
   onHardCut?: () => void;
 }) {
   const [connectLine] = useState(() => pickRandomConnectLine());
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const teaserVideo = host.teaser_video_url || "";
 
   const liveLabel = useMemo(
     () => (host.source === "live" ? "Live · Preview" : "Free preview"),
     [host.source],
   );
+
+  // Autoplay the teaser video inside the call form (muted + inline is required
+  // for mobile/WebView autoplay to succeed).
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !teaserVideo) return;
+    el.muted = true;
+    el.playsInline = true;
+    el.loop = true;
+    void el.play().catch(() => undefined);
+  }, [teaserVideo]);
 
   return (
     <motion.div
@@ -32,26 +45,40 @@ export function TeaserCallPlayer({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.35 }}
     >
-      <motion.div
-        className="absolute inset-0"
-        initial={{ scale: 1.05 }}
-        animate={{ scale: 1.12 }}
-        transition={{
-          duration: 18,
-          ease: "linear",
-          repeat: Infinity,
-          repeatType: "reverse",
-        }}
-      >
-        <Image
-          src={host.avatar}
-          alt=""
-          fill
-          priority
-          className="object-cover object-top"
-          sizes="430px"
+      {teaserVideo ? (
+        <video
+          ref={videoRef}
+          className="absolute inset-0 h-full w-full object-cover"
+          src={teaserVideo}
+          poster={host.avatar}
+          muted
+          loop
+          autoPlay
+          playsInline
+          preload="auto"
         />
-      </motion.div>
+      ) : (
+        <motion.div
+          className="absolute inset-0"
+          initial={{ scale: 1.05 }}
+          animate={{ scale: 1.12 }}
+          transition={{
+            duration: 18,
+            ease: "linear",
+            repeat: Infinity,
+            repeatType: "reverse",
+          }}
+        >
+          <Image
+            src={host.avatar}
+            alt=""
+            fill
+            priority
+            className="object-cover object-top"
+            sizes="430px"
+          />
+        </motion.div>
+      )}
 
       <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/45 via-transparent to-black/75" />
       <div className="absolute inset-0 z-[3]" />

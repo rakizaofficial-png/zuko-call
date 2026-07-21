@@ -5,7 +5,15 @@ export const DAILY_CHECKIN_REWARDS = [20] as const;
 export const DAILY_LOGIN_COINS = 20;
 
 export const SPIN_COST = 0;
-export const MAX_SPINS_PER_DAY = 3;
+/** Strict daily limit — one spin per day. */
+export const MAX_SPINS_PER_DAY = 1;
+/**
+ * Hard lifetime cap on coins won from the Lucky Spin. Once a user's cumulative
+ * spin winnings reach this, spinning is blocked so the feature can never drain
+ * excess coins / hand out unlimited payouts. With 30–35 per spin this keeps the
+ * overall spin winnings in the ~60–70 range.
+ */
+export const SPIN_TOTAL_COIN_CAP = 70;
 
 /** UI segments only — actual payout is random 30–35 from server */
 export const SPIN_PRIZES: SpinPrize[] = [

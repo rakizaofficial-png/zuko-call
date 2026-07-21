@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
-import { SPIN_PRIZES } from "@/lib/engagement";
+import { SPIN_PRIZES, canSpin, spinCoinsRemaining } from "@/lib/engagement";
 import { spinsRemaining, useApp } from "@/lib/store";
 
 export function LuckySpinModal({
@@ -18,13 +18,15 @@ export function LuckySpinModal({
   const [rotation, setRotation] = useState(0);
   const [resultLabel, setResultLabel] = useState<string | null>(null);
   const left = spinsRemaining(engagement);
+  const capLeft = spinCoinsRemaining(engagement);
+  const allowed = canSpin(engagement);
 
   const segments = useMemo(() => SPIN_PRIZES, []);
 
   if (!open) return null;
 
   const spin = async () => {
-    if (spinning || left <= 0) return;
+    if (spinning || !allowed) return;
     setSpinning(true);
     setResultLabel(null);
     const result = await doLuckySpin();
@@ -52,7 +54,9 @@ export function LuckySpinModal({
         <div className="mb-4 flex items-center justify-between">
           <div>
             <p className="font-display text-lg font-extrabold">Lucky Spin</p>
-            <p className="text-xs text-muted">{left} free spins left today</p>
+            <p className="text-xs text-muted">
+              {left} spin left today · {capLeft} coins cap left
+            </p>
           </div>
           <button
             type="button"
@@ -106,11 +110,17 @@ export function LuckySpinModal({
 
         <button
           type="button"
-          disabled={spinning || left <= 0}
+          disabled={spinning || !allowed}
           onClick={() => void spin()}
           className="w-full rounded-full bg-gradient-to-r from-coral to-coral-2 py-3.5 text-sm font-bold text-white disabled:opacity-40"
         >
-          {spinning ? "Spinning…" : left > 0 ? "Spin now" : "Come back tomorrow"}
+          {spinning
+            ? "Spinning…"
+            : allowed
+              ? "Spin now"
+              : left <= 0
+                ? "Come back tomorrow"
+                : "Spin limit reached"}
         </button>
       </motion.div>
     </div>

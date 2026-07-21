@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
@@ -8,6 +8,7 @@ import {
   Crown,
   Flame,
   History,
+  ImageUp,
   LifeBuoy,
   Pencil,
   Phone,
@@ -33,9 +34,42 @@ import {
   getDeviceUserId,
   type WalletLedgerEntry,
 } from "@/lib/walletApi";
-import { shortUserId, avatarStyleOptions } from "@/lib/userProfile";
+import { numericLumaId, avatarStyleOptions } from "@/lib/userProfile";
 import { nextCheckInReward, spinsRemaining, useApp } from "@/lib/store";
 import { vipLabel } from "@/lib/ledger";
+
+/**
+ * Read a gallery image file, center-crop to a square, and downscale to a small
+ * JPEG data URL so it renders everywhere and stays under localStorage limits.
+ */
+async function fileToSquareDataUrl(file: File, size = 256): Promise<string> {
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2;
+      const sy = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => reject(new Error("decode failed"));
+    img.src = dataUrl;
+  });
+}
 
 /** Modern profile — auto id, wallet, rewards, buy coins on same userId */
 export default function ProfilePage() {
@@ -67,6 +101,7 @@ export default function ProfilePage() {
   const [nameDraft, setNameDraft] = useState("");
   const [historyTab, setHistoryTab] = useState<"calls" | "coins">("calls");
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // SSR-safe: keep defaults until client has hydrated local engagement
   const level = clientReady ? engagement.level : 1;
@@ -124,7 +159,7 @@ export default function ProfilePage() {
         return;
       }
       await syncWallet();
-      pushToast(`+${result.credited} coins → ${shortUserId(id)}`);
+      pushToast(`+${result.credited} coins → Luma ID ${numericLumaId(id)}`);
     } catch (e: unknown) {
       pushToast(e instanceof Error ? e.message : "Purchase failed");
     } finally {
@@ -135,6 +170,22 @@ export default function ProfilePage() {
   const saveName = async () => {
     await updateDisplayName(nameDraft);
     setEditingName(false);
+  };
+
+  const onGalleryPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setSavingAvatar(true);
+    try {
+      const dataUrl = await fileToSquareDataUrl(file, 256);
+      await updateAvatar(dataUrl);
+      setEditingAvatar(false);
+    } catch {
+      pushToast("Could not load that photo");
+    } finally {
+      setSavingAvatar(false);
+    }
   };
 
   const pickAvatar = async (url: string) => {
@@ -151,12 +202,14 @@ export default function ProfilePage() {
     }
   };
 
+  const lumaId = numericLumaId(userId);
+
   const copyId = async () => {
     try {
-      await navigator.clipboard.writeText(userId);
-      pushToast("User ID copied");
+      await navigator.clipboard.writeText(lumaId);
+      pushToast("Luma ID copied");
     } catch {
-      pushToast(userId);
+      pushToast(lumaId);
     }
   };
 
@@ -245,9 +298,9 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => void copyId()}
-                className="mt-1 font-mono text-[10px] text-cyan/80"
+                className="mt-1 font-mono text-[11px] font-semibold tracking-wider text-cyan/90"
               >
-                ID {shortUserId(userId)} · tap to copy
+                Luma ID {lumaId} · tap to copy
               </button>
             </div>
             <button
@@ -262,8 +315,24 @@ export default function ProfilePage() {
 
           {editingAvatar ? (
             <div className="relative mt-4">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={savingAvatar}
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan/40 bg-cyan/10 py-3 text-sm font-bold text-cyan disabled:opacity-50"
+              >
+                <ImageUp className="h-4 w-4" />
+                {savingAvatar ? "Uploading…" : "Upload photo from gallery"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void onGalleryPick(e)}
+              />
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                Choose your look
+                Or choose a look
               </p>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {avatarChoices.map((opt) => (

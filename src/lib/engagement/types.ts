@@ -56,6 +56,8 @@ export type EngagementState = {
   checkInClaimedToday: boolean;
   lastSpinDay: string | null;
   spinsToday: number;
+  /** Cumulative coins ever won from the Lucky Spin (capped by SPIN_TOTAL_COIN_CAP). */
+  spinCoinsTotal: number;
   level: number;
   levelXp: number;
   badges: AchievementId[];

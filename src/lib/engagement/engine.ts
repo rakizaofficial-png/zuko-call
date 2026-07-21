@@ -3,6 +3,7 @@ import {
   DAILY_LOGIN_COINS,
   MAX_SPINS_PER_DAY,
   SPIN_PRIZES,
+  SPIN_TOTAL_COIN_CAP,
   WEEKLY_MISSIONS,
   XP_PER_LEVEL,
 } from "./config";
@@ -176,6 +177,17 @@ export function spinLuckyWheel(opts?: {
       message: "No spins left today — come back tomorrow",
     };
   }
+  // Hard cap — never pay out beyond the lifetime spin coin limit.
+  const alreadyWon = state.spinCoinsTotal || 0;
+  const capRemaining = Math.max(0, SPIN_TOTAL_COIN_CAP - alreadyWon);
+  if (capRemaining <= 0) {
+    return {
+      state,
+      coins: 0,
+      xp: 0,
+      message: "Spin reward limit reached",
+    };
+  }
 
   const prize =
     opts?.prize ||
@@ -187,15 +199,17 @@ export function spinLuckyWheel(opts?: {
       color: "#ffb800",
     } satisfies SpinPrize);
 
+  // Clamp this spin's payout so cumulative spin winnings never exceed the cap.
+  const coins = Math.max(0, Math.min(prize.coins, capRemaining));
+  const xp = coins > 0 ? 15 : 5;
+
   state = {
     ...state,
     spinsToday: state.spinsToday + 1,
     lastSpinDay: today,
+    spinCoinsTotal: alreadyWon + coins,
   };
   state = bumpMission(state, "spin_once", 1);
-
-  let coins = prize.coins;
-  let xp = prize.coins > 0 ? 15 : 5;
   state = addLevelXp(state, xp);
   if (coins > 0) {
     state = pushHistory(state, coins, `Lucky Spin · ${prize.label}`, "credit");
@@ -401,4 +415,14 @@ export function spinsRemaining(state: EngagementState): number {
   const today = todayKey();
   if (state.lastSpinDay !== today) return MAX_SPINS_PER_DAY;
   return Math.max(0, MAX_SPINS_PER_DAY - state.spinsToday);
+}
+
+/** Coins still available under the lifetime spin cap. */
+export function spinCoinsRemaining(state: EngagementState): number {
+  return Math.max(0, SPIN_TOTAL_COIN_CAP - (state.spinCoinsTotal || 0));
+}
+
+/** Whether the user may spin now: daily limit not hit AND lifetime cap not reached. */
+export function canSpin(state: EngagementState): boolean {
+  return spinsRemaining(state) > 0 && spinCoinsRemaining(state) > 0;
 }

@@ -40,6 +40,7 @@ export function emptyEngagement(): EngagementState {
     checkInClaimedToday: false,
     lastSpinDay: null,
     spinsToday: 0,
+    spinCoinsTotal: 0,
     level: 1,
     levelXp: 0,
     badges: [],

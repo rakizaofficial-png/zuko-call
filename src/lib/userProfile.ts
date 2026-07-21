@@ -376,3 +376,16 @@ export function shortUserId(userId: string): string {
   if (userId.length <= 12) return userId;
   return `${userId.slice(0, 8)}…${userId.slice(-4)}`;
 }
+
+/**
+ * Clean numeric Luma ID (digits only) derived deterministically from the
+ * userId — stable per device, e.g. "10482935". Replaces the raw UUID display.
+ */
+export function numericLumaId(userId: string): string {
+  if (!userId) return "00000000";
+  // Two 32-bit hashes over different salts → 8 stable digits.
+  const a = hashId(userId);
+  const b = hashId(`luma-id:${userId}`);
+  const combined = (a % 10000) * 10000 + (b % 10000);
+  return String(combined).padStart(8, "0");
+}
