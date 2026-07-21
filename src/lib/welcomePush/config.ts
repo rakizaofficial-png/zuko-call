@@ -75,13 +75,18 @@ export const WELCOME_PAYWALL_TIERS = buildPaywallTiers("her");
 
 export const WELCOME_PUSH_CONFIG = {
   /**
-   * First lure after 1–2 minutes of user activity on home / dashboard.
+   * First lure shortly after launch when wallet is empty (5–9s).
    */
-  launchDelayMinMs: 60_000,
-  launchDelayMaxMs: 120_000,
-  /** Recurring lure while browsing (≈1–2 min between rings) */
-  repeatEveryMinMs: 60_000,
-  repeatEveryMaxMs: 120_000,
+  launchDelayMinMs: 5_000,
+  launchDelayMaxMs: 9_000,
+  /** Recurring lure while browsing broke (5–9s between rings) */
+  repeatEveryMinMs: 5_000,
+  repeatEveryMaxMs: 9_000,
+  /**
+   * After recharge paywall dismiss / expire — next autopush only in this window.
+   */
+  postRechargeDelayMinMs: 5_000,
+  postRechargeDelayMaxMs: 9_000,
   /** Incoming modal + ringtone auto-end */
   ringDurationMinMs: 22_000,
   ringDurationMaxMs: 35_000,
@@ -93,5 +98,5 @@ export const WELCOME_PUSH_CONFIG = {
   hostCooldownCount: 10,
   messageCooldownCount: 14,
   /** Bump when media / timing rules change */
-  storageKey: "luma_welcome_push_v10_activity_1to2m",
+  storageKey: "luma_welcome_push_v11_post_recharge_5to9s",
 } as const;

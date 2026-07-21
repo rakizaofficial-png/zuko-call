@@ -49,6 +49,16 @@ function main() {
     WELCOME_PUSH_CONFIG.repeatEveryMaxMs > WELCOME_PUSH_CONFIG.repeatEveryMinMs,
     "Repeat delay range invalid",
   );
+  assert(
+    WELCOME_PUSH_CONFIG.postRechargeDelayMinMs === 5_000 &&
+      WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs === 9_000,
+    "Post-recharge autopush must be 5–9 seconds",
+  );
+  assert(
+    WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs >
+      WELCOME_PUSH_CONFIG.postRechargeDelayMinMs,
+    "Post-recharge delay range invalid",
+  );
 
   console.log(
     JSON.stringify(

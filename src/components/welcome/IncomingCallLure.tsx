@@ -1,15 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { BadgeCheck, Crown, Globe2, Phone, PhoneOff, Sparkles } from "lucide-react";
 import type { WelcomePushHost } from "@/lib/welcomePush/config";
-import { pickPushCallVideo } from "@/lib/welcomePush/pushCallVideos";
 
 /**
- * Full-screen incoming call lure — looping ring video + hot thumbnail DP,
- * single-click Accept / Reject (no loading gates).
+ * Full-screen incoming call lure — host profile photo only (no background video).
+ * Single-click Accept / Reject (no loading gates).
  */
 export function IncomingCallLure({
   host,
@@ -22,21 +20,6 @@ export function IncomingCallLure({
   onAccept: () => void;
   onReject: () => void;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  // Attach a bundled provided clip as the ring video so it always renders in
-  // the push-call UI (mobile WebView can't reach some remote URLs). Falls back
-  // to the host's own ring URL if provided.
-  const ringSrc = pickPushCallVideo(host.host_id || host.name) || host.ring_video_url;
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    el.muted = true;
-    el.playsInline = true;
-    el.loop = true;
-    void el.play().catch(() => undefined);
-  }, [ringSrc]);
-
   return (
     <motion.div
       className="fixed inset-0 z-[100] mx-auto flex w-full max-w-[430px] flex-col overflow-hidden bg-[#06040b]"
@@ -45,19 +28,26 @@ export function IncomingCallLure({
       exit={{ opacity: 0, y: 16, scale: 0.98 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
     >
-      <div className="absolute inset-0">
-        <video
-          ref={videoRef}
-          className="h-full w-full object-cover"
-          src={ringSrc}
-          muted
-          playsInline
-          loop
-          autoPlay
-          preload="auto"
-          poster={host.avatar}
+      <motion.div
+        className="absolute inset-0"
+        initial={{ scale: 1.06 }}
+        animate={{ scale: 1.14 }}
+        transition={{
+          duration: 16,
+          ease: "linear",
+          repeat: Infinity,
+          repeatType: "reverse",
+        }}
+      >
+        <Image
+          src={host.avatar}
+          alt=""
+          fill
+          priority
+          className="object-cover object-top"
+          sizes="430px"
         />
-      </div>
+      </motion.div>
 
       <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-[#06040b]/45 to-[#06040b]/95" />
 

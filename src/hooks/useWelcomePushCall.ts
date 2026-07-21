@@ -9,6 +9,8 @@ import {
   type WelcomePushPhase,
 } from "@/lib/welcomePush/config";
 import {
+  nextLaunchDelayMs,
+  nextPostRechargeDelayMs,
   nextRepeatDelayMs,
   nextRingDurationMs,
   pickNextWelcomeCaller,
@@ -26,9 +28,8 @@ import { useApp } from "@/lib/store";
  *   live host → instant Agora call route (zero-lag)
  *   demo → TEASER (30s free preview) → PAYWALL_BOOST
  *      → recharge OR offer expires / dismiss → call cut (IDLE)
+ * Next autopush after paywall is strictly 5–9s later.
  */
-/** Ring shortly after launch/initialization once we know the user is broke. */
-const STARTUP_CALL_DELAY_MS = 1500;
 
 export function useWelcomePushCall(opts: { enabled: boolean }) {
   const router = useRouter();
@@ -172,8 +173,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   //    ring during the pre-sync window when coins default to 0.
   //  • Strict rule: fire ONLY when coins are exhausted (<= 0). A user with a
   //    balance has any pending auto-call cancelled.
-  //  • When broke, ring shortly after launch/initialization so the trigger
-  //    fires on app open (same on the mobile WebView as on web).
+  //  • When broke, first ring lands in the 5–9s launch window.
   useEffect(() => {
     if (!opts.enabled) {
       clearTimers();
@@ -189,7 +189,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       }
       return;
     }
-    scheduleNext(STARTUP_CALL_DELAY_MS);
+    scheduleNext(nextLaunchDelayMs());
     return () => {
       clearTimers();
       if (repeatTimer.current) clearTimeout(repeatTimer.current);
@@ -230,11 +230,11 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       setOfferLeft((s) => {
         if (s <= 1) {
           if (offerTimer.current) clearInterval(offerTimer.current);
-          // Cut call when offer ends without recharge
+          // Cut call when offer ends without recharge — next ring in 5–9s
           queueMicrotask(() => {
             clearTimers();
             setPhase("IDLE");
-            scheduleNext(nextRepeatDelayMs());
+            scheduleNext(nextPostRechargeDelayMs());
           });
           return 0;
         }
@@ -297,10 +297,10 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   }, [clearTimers, host.host_id, host.source, router]);
 
   const closePaywall = useCallback(() => {
-    // Dismiss without recharge → cut call
+    // Dismiss without recharge → cut call; next autopush only 5–9s later
     clearTimers();
     setPhase("IDLE");
-    scheduleNext(nextRepeatDelayMs());
+    scheduleNext(nextPostRechargeDelayMs());
   }, [clearTimers, scheduleNext]);
 
   const hardDisconnectTeaser = useCallback(() => {

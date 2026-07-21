@@ -149,6 +149,14 @@ export function nextRepeatDelayMs(): number {
   );
 }
 
+/** Delay until next autopush after recharge popup dismiss / expire */
+export function nextPostRechargeDelayMs(): number {
+  return randomDelayMs(
+    WELCOME_PUSH_CONFIG.postRechargeDelayMinMs,
+    WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs,
+  );
+}
+
 export function nextRingDurationMs(): number {
   return randomDelayMs(
     WELCOME_PUSH_CONFIG.ringDurationMinMs,
