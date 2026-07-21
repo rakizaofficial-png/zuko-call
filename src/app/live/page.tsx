@@ -19,6 +19,10 @@ type LiveRoomRow = {
   mode?: string;
   country?: string;
   thumbnailUrl?: string;
+  isLocked?: boolean;
+  locked?: boolean;
+  isPremium?: boolean;
+  premium?: boolean;
 };
 
 type Card = {
@@ -30,6 +34,7 @@ type Card = {
   viewers: number;
   country: string;
   giftCoins: number;
+  locked: boolean;
 };
 
 const TABS = ["Following", "Live", "Talent", "New"] as const;
@@ -90,6 +95,14 @@ export default function LivePage() {
           next = rooms.map((r) => {
             const host = hosts.find((h) => h.id === r.hostId);
             const id = String(r.hostId || r.id);
+            const locked = Boolean(
+              r.isLocked ||
+                r.locked ||
+                r.isPremium ||
+                r.premium ||
+                r.mode === "premium" ||
+                r.mode === "locked",
+            );
             return {
               id,
               roomId: r.id,
@@ -99,10 +112,11 @@ export default function LivePage() {
                 host?.avatarUrl || r.hostAvatar || r.thumbnailUrl,
                 r.hostName || host?.name || "Host",
               ),
-              title: r.title || "Live now",
+              title: r.title || (locked ? "Premium live" : "Live now"),
               viewers: Number(r.viewers) || 0,
               country: r.country || host?.country || "",
               giftCoins: Number(r.giftCoins) || 0,
+              locked,
             };
           });
         } else {
@@ -117,6 +131,7 @@ export default function LivePage() {
               viewers: 0,
               country: h.country || "",
               giftCoins: 0,
+              locked: false,
             }));
         }
         setCards(next);
@@ -250,11 +265,15 @@ export default function LivePage() {
                 <Eye className="h-3 w-3" />
                 {card.viewers > 0 ? card.viewers.toLocaleString() : "Live"}
               </div>
-              {card.giftCoins > 0 && (
+              {card.locked ? (
+                <div className="absolute right-2 top-2 rounded-md bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-black">
+                  🔒 Premium
+                </div>
+              ) : card.giftCoins > 0 ? (
                 <div className="absolute right-2 top-2 rounded-md bg-[#7b2cff]/85 px-1.5 py-0.5 text-[10px] font-bold text-white">
                   💎 {card.giftCoins}
                 </div>
-              )}
+              ) : null}
               <div className="absolute inset-x-0 bottom-0 p-2.5">
                 <p className="flex items-center gap-1 text-xs font-bold text-white">
                   <span>{flagEmoji(card.country)}</span>

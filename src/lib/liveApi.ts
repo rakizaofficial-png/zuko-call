@@ -2,6 +2,7 @@
 
 import { requireApiBase } from "@/config/apiConfig";
 import { apiConfig } from "@/config/apiConfig";
+import { parseRoomLocked } from "@/lib/liveLock";
 
 export type HostOnlyLiveRoom = {
   id: string;
@@ -15,6 +16,10 @@ export type HostOnlyLiveRoom = {
   isLive: boolean;
   mode?: string;
   country?: string;
+  /** Host locked the stream — viewers must unlock with a gift */
+  locked: boolean;
+  unlockCoins: number;
+  unlockGiftId?: string;
 };
 
 export type LiveComment = {
@@ -27,6 +32,31 @@ export type LiveComment = {
   giftEmoji?: string;
   giftCoins?: number;
 };
+
+function mapRoom(
+  r: Record<string, unknown>,
+  extras?: { channel?: string; giftCoins?: number; viewers?: number },
+  fallbackHostId?: string,
+): HostOnlyLiveRoom {
+  const hostId = String(r.hostId || fallbackHostId || "");
+  const lock = parseRoomLocked(r);
+  return {
+    id: String(r.id || `live_${hostId}`),
+    hostId,
+    hostName: String(r.hostName || "Host"),
+    hostAvatar: r.hostAvatar ? String(r.hostAvatar) : undefined,
+    title: r.title ? String(r.title) : "Live now",
+    channel: String(extras?.channel || r.channel || `live_${hostId}`),
+    viewers: Number(extras?.viewers ?? r.viewers ?? 0),
+    giftCoins: Number(extras?.giftCoins ?? r.giftCoins ?? 0),
+    isLive: r.isLive !== false && Boolean(r.isLive ?? true),
+    mode: r.mode ? String(r.mode) : "solo",
+    country: r.country ? String(r.country) : undefined,
+    locked: lock.locked,
+    unlockCoins: lock.unlockCoins,
+    unlockGiftId: lock.unlockGiftId,
+  };
+}
 
 export async function fetchHostOnlyLiveRoom(
   idOrHost: string,
@@ -43,20 +73,17 @@ export async function fetchHostOnlyLiveRoom(
       viewers?: number;
     };
     const r = data.room || {};
-    const hostId = String(r.hostId || idOrHost);
-    return {
-      id: String(r.id || `live_${hostId}`),
-      hostId,
-      hostName: String(r.hostName || "Host"),
-      hostAvatar: r.hostAvatar ? String(r.hostAvatar) : undefined,
-      title: r.title ? String(r.title) : "Live now",
-      channel: String(data.channel || r.channel || `live_${hostId}`),
-      viewers: Number(data.viewers ?? r.viewers ?? 0),
-      giftCoins: Number(data.giftCoins ?? r.giftCoins ?? 0),
-      isLive: Boolean(r.isLive),
-      mode: r.mode ? String(r.mode) : "solo",
-      country: r.country ? String(r.country) : undefined,
-    };
+    const mapped = mapRoom(
+      r,
+      {
+        channel: data.channel,
+        giftCoins: data.giftCoins,
+        viewers: data.viewers,
+      },
+      idOrHost,
+    );
+    mapped.isLive = Boolean(r.isLive);
+    return mapped;
   }
 
   // Fallback: list endpoint + host presence (works before single-room route is deployed)
@@ -76,6 +103,8 @@ export async function fetchHostOnlyLiveRoom(
             avatarUrl?: string;
             isLive?: boolean;
             country?: string;
+            isPremium?: boolean;
+            locked?: boolean;
           }>;
         })
       : { hosts: [] };
@@ -90,25 +119,16 @@ export async function fetchHostOnlyLiveRoom(
       ) || null;
 
     if (hit && hit.isLive !== false) {
-      const hostId = String(hit.hostId || idOrHost);
-      return {
-        id: String(hit.id || `live_${hostId}`),
-        hostId,
-        hostName: String(hit.hostName || "Host"),
-        hostAvatar: hit.hostAvatar ? String(hit.hostAvatar) : undefined,
-        title: hit.title ? String(hit.title) : "Live now",
-        channel: String(hit.channel || `live_${hostId}`),
-        viewers: Number(hit.viewers || 0),
-        giftCoins: Number(hit.giftCoins || 0),
-        isLive: true,
-        mode: hit.mode ? String(hit.mode) : "solo",
-      };
+      const mapped = mapRoom(hit, undefined, idOrHost);
+      mapped.isLive = true;
+      return mapped;
     }
 
     const host = (hostsData.hosts || []).find(
       (h) => h.id === idOrHost && h.isLive,
     );
     if (host) {
+      const lock = parseRoomLocked(host as unknown as Record<string, unknown>);
       return {
         id: `live_${host.id}`,
         hostId: host.id,
@@ -119,8 +139,11 @@ export async function fetchHostOnlyLiveRoom(
         viewers: 0,
         giftCoins: 0,
         isLive: true,
-        mode: "solo",
+        mode: lock.locked ? "premium" : "solo",
         country: host.country,
+        locked: lock.locked,
+        unlockCoins: lock.unlockCoins,
+        unlockGiftId: lock.unlockGiftId,
       };
     }
   } catch {

@@ -9,12 +9,13 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Gem, Plus, Send, X } from "lucide-react";
 import { gifts } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
+import { PremiumLiveLockOverlay } from "@/components/live/PremiumLiveLockOverlay";
 import { HostAvatarImg } from "@/components/host/HostAvatarImg";
 import {
   startUserAgoraLiveViewer,
@@ -34,8 +35,16 @@ import {
   makeOptimisticComment,
   sendLiveComment,
 } from "@/lib/liveChat";
+import {
+  giftMeetsUnlock,
+  hasUnlockedLive,
+  markLiveUnlocked,
+  pickUnlockGift,
+} from "@/lib/liveLock";
 import { getDeviceUserId } from "@/lib/walletApi";
 import { getRealtimeClient } from "@/lib/realtime/websocket";
+import { requireApiBase } from "@/config/apiConfig";
+import type { Gift } from "@/lib/data";
 
 const NAME_COLORS = [
   "text-cyan-300",
@@ -58,6 +67,10 @@ export default function HostOnlyLiveRoomPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const forceLock =
+    searchParams.get("locked") === "1" ||
+    searchParams.get("premium") === "1";
   const {
     following,
     toggleFollow,
@@ -83,11 +96,36 @@ export default function HostOnlyLiveRoomPage({
   const [floating, setFloating] = useState<{ id: string; emoji: string }[]>([]);
   const [streamReady, setStreamReady] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [unlocked, setUnlocked] = useState(false);
+  const [unlockBusy, setUnlockBusy] = useState(false);
 
   const userId = storeUserId || getDeviceUserId();
   const userName = displayName || "Fan";
 
-  const chatEnabled = Boolean(room?.id && (status === "live" || status === "loading"));
+  const unlockCoins = room?.unlockCoins || 199;
+  const unlockGift =
+    (room?.unlockGiftId && gifts.find((g) => g.id === room.unlockGiftId)) ||
+    pickUnlockGift(unlockCoins);
+  const needsUnlock = Boolean(room?.locked) && !unlocked;
+  const chatEnabled = Boolean(
+    room?.id && (status === "live" || status === "loading") && !needsUnlock,
+  );
+
+  const applyUnlock = useCallback(
+    (gift?: Gift) => {
+      if (!room) return;
+      if (gift && !giftMeetsUnlock(gift.coins, unlockCoins)) {
+        pushToast?.(
+          `Send a gift of ${unlockCoins}+ coins to unlock this Premium live`,
+        );
+        return;
+      }
+      markLiveUnlocked(room.id, userId);
+      setUnlocked(true);
+      pushToast?.("Premium live unlocked");
+    },
+    [room, unlockCoins, userId, pushToast],
+  );
 
   const loadRoom = useCallback(async () => {
     const next = await fetchHostOnlyLiveRoom(id);
@@ -96,10 +134,19 @@ export default function HostOnlyLiveRoomPage({
       setRoom(next);
       return null;
     }
-    setRoom(next);
+    const titlePremium = /premium|locked/i.test(next.title || "");
+    const locked = next.locked || forceLock || titlePremium;
+    const roomNext = {
+      ...next,
+      locked,
+      unlockCoins: next.unlockCoins || 199,
+      mode: locked ? next.mode || "premium" : next.mode,
+    };
+    setRoom(roomNext);
     setStatus("live");
-    return next;
-  }, [id]);
+    setUnlocked(hasUnlockedLive(roomNext.id, userId) || !locked);
+    return roomNext;
+  }, [id, userId, forceLock]);
 
   // Resolve room + join Agora as viewer (video failure must NOT kill chat)
   useEffect(() => {
@@ -320,8 +367,60 @@ export default function HostOnlyLiveRoomPage({
     }
   };
 
+  const sendUnlockGift = async () => {
+    if (!room || unlockBusy) return;
+    if (userId === room.hostId) {
+      pushToast?.("Hosts cannot gift themselves!");
+      return;
+    }
+    if (coins < unlockGift.coins) {
+      pushToast?.("Not enough coins — recharge to unlock");
+      setGiftOpen(true);
+      return;
+    }
+    setUnlockBusy(true);
+    try {
+      const res = await fetch(`${requireApiBase()}/gifts/send`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": userId,
+        },
+        body: JSON.stringify({
+          userId,
+          userName,
+          hostId: room.hostId,
+          giftId: unlockGift.id,
+          roomId: room.id,
+          purpose: "live_unlock",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Unlock gift failed");
+      await syncWallet?.();
+      applyUnlock(unlockGift);
+      const fid = `${Date.now()}`;
+      setFloating((f) => [...f.slice(-8), { id: fid, emoji: unlockGift.emoji }]);
+      setTimeout(() => setFloating((f) => f.filter((x) => x.id !== fid)), 1400);
+    } catch (err) {
+      // Fallback: open gift sheet so user can pick any qualifying gift
+      pushToast?.(
+        err instanceof Error
+          ? `${err.message} — pick an unlock gift`
+          : "Pick an unlock gift",
+      );
+      setGiftOpen(true);
+    } finally {
+      setUnlockBusy(false);
+    }
+  };
+
   const sendQuickGift = async (giftId: string) => {
     if (!room) return;
+    if (needsUnlock) {
+      setGiftOpen(true);
+      return;
+    }
     if (userId === room.hostId) {
       pushToast?.("Hosts cannot gift themselves!");
       return;
@@ -329,7 +428,6 @@ export default function HostOnlyLiveRoomPage({
     const g = gifts.find((x) => x.id === giftId);
     if (!g) return;
     try {
-      const { requireApiBase } = await import("@/config/apiConfig");
       const res = await fetch(`${requireApiBase()}/gifts/send`, {
         method: "POST",
         headers: {
@@ -347,6 +445,9 @@ export default function HostOnlyLiveRoomPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gift failed");
       await syncWallet?.();
+      if (room.locked && giftMeetsUnlock(g.coins, unlockCoins)) {
+        applyUnlock(g);
+      }
       const fid = `${Date.now()}`;
       setFloating((f) => [...f.slice(-8), { id: fid, emoji: g.emoji }]);
       setTimeout(() => setFloating((f) => f.filter((x) => x.id !== fid)), 1400);
@@ -365,7 +466,9 @@ export default function HostOnlyLiveRoomPage({
       <div
         ref={videoRef}
         id="agora-live-remote"
-        className="absolute inset-0 z-0 bg-black [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+        className={`absolute inset-0 z-0 bg-black [&_video]:h-full [&_video]:w-full [&_video]:object-cover ${
+          needsUnlock ? "scale-110 blur-2xl brightness-50" : ""
+        }`}
       />
 
       {/* Cover while connecting / waiting for host video */}
@@ -377,19 +480,34 @@ export default function HostOnlyLiveRoomPage({
             name={room?.hostName}
             alt=""
             fill
-            className="opacity-70"
+            className={`opacity-70 ${needsUnlock ? "blur-xl" : ""}`}
           />
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <p className="rounded-full bg-black/55 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
               {status === "ended"
                 ? "Live ended"
-                : videoError
-                  ? "Chat ready · waiting for host camera"
-                  : "Connecting to host…"}
+                : needsUnlock
+                  ? "Premium live locked"
+                  : videoError
+                    ? "Chat ready · waiting for host camera"
+                    : "Connecting to host…"}
             </p>
           </div>
         </div>
       )}
+
+      {needsUnlock && streamReady ? (
+        <div className="pointer-events-none absolute inset-0 z-[1]">
+          <HostAvatarImg
+            src={avatar}
+            hostId={room?.hostId || id}
+            name={room?.hostName}
+            alt=""
+            fill
+            className="scale-110 opacity-60 blur-2xl"
+          />
+        </div>
+      ) : null}
 
       <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/55 via-transparent to-black/85" />
 
@@ -409,7 +527,11 @@ export default function HostOnlyLiveRoomPage({
                 {room?.hostName || "Host"}
               </p>
               <p className="text-[10px] font-semibold text-rose-300">
-                {status === "live" ? "● LIVE" : status.toUpperCase()}
+                {needsUnlock
+                  ? "🔒 PREMIUM"
+                  : status === "live"
+                    ? "● LIVE"
+                    : status.toUpperCase()}
               </p>
             </div>
             <button
@@ -567,6 +689,18 @@ export default function HostOnlyLiveRoomPage({
       </div>
 
       <AnimatePresence>
+        {needsUnlock && room && status === "live" ? (
+          <PremiumLiveLockOverlay
+            hostName={room.hostName}
+            unlockGift={unlockGift}
+            unlockCoins={unlockCoins}
+            busy={unlockBusy}
+            onUnlock={() => void sendUnlockGift()}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {floating.map((f) => (
           <motion.span
             key={f.id}
@@ -624,13 +758,17 @@ export default function HostOnlyLiveRoomPage({
           onClose={() => setGiftOpen(false)}
           hostId={room.hostId}
           roomId={room.id}
-          onSent={(emoji) => {
+          highlightMinCoins={needsUnlock ? unlockCoins : undefined}
+          onSent={(emoji, gift) => {
             const fid = `${Date.now()}`;
             setFloating((f) => [...f.slice(-8), { id: fid, emoji }]);
             setTimeout(
               () => setFloating((f) => f.filter((x) => x.id !== fid)),
               1400,
             );
+            if (room.locked && gift && giftMeetsUnlock(gift.coins, unlockCoins)) {
+              applyUnlock(gift);
+            }
           }}
         />
       )}

@@ -20,13 +20,16 @@ export function GiftSheet({
   hostId,
   roomId,
   callId,
+  highlightMinCoins,
 }: {
   open: boolean;
   onClose: () => void;
-  onSent?: (emoji: string) => void;
+  onSent?: (emoji: string, gift?: Gift) => void;
   hostId?: string;
   roomId?: string;
   callId?: string;
+  /** Highlight gifts that meet this coin threshold (e.g. live unlock) */
+  highlightMinCoins?: number;
 }) {
   const { spend, syncWallet, pushToast, displayName, userId } = useApp();
   const [sending, setSending] = useState<string | null>(null);
@@ -80,7 +83,7 @@ export function GiftSheet({
         return;
       }
 
-      onSent?.(g.emoji);
+      onSent?.(g.emoji, g);
       if (isCinematic(g)) {
         setCinematic(g);
         setTimeout(() => {
@@ -144,45 +147,66 @@ export function GiftSheet({
               Classic
             </p>
             <div className="grid grid-cols-3 gap-2.5">
-              {basic.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void send(g)}
-                  className="flex flex-col items-center gap-1 rounded-2xl border border-line bg-ink-3 px-2 py-3 transition active:scale-95 disabled:opacity-50"
-                >
-                  <span className="text-2xl">{g.emoji}</span>
-                  <span className="text-xs font-semibold">{g.name}</span>
-                  <span className="text-[10px] text-gold">{g.coins} coins</span>
-                </button>
-              ))}
+              {basic.map((g) => {
+                const unlockOk =
+                  highlightMinCoins != null && g.coins >= highlightMinCoins;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void send(g)}
+                    className={`relative flex flex-col items-center gap-1 rounded-2xl border px-2 py-3 transition active:scale-95 disabled:opacity-50 ${
+                      unlockOk
+                        ? "border-amber-300/60 bg-amber-400/15"
+                        : "border-line bg-ink-3"
+                    }`}
+                  >
+                    {unlockOk ? (
+                      <span className="absolute right-1 top-1 rounded-full bg-amber-400 px-1 text-[8px] font-bold text-black">
+                        UNLOCK
+                      </span>
+                    ) : null}
+                    <span className="text-2xl">{g.emoji}</span>
+                    <span className="text-xs font-semibold">{g.name}</span>
+                    <span className="text-[10px] text-gold">{g.coins} coins</span>
+                  </button>
+                );
+              })}
             </div>
 
             <p className="mb-2 mt-4 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-coral">
               <Sparkles className="h-3 w-3" /> Adult · cinematic (250+)
             </p>
             <div className="grid grid-cols-3 gap-2.5">
-              {adult.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void send(g)}
-                  className="relative flex flex-col items-center gap-1 overflow-hidden rounded-2xl border border-coral/40 bg-gradient-to-b from-coral/20 to-ink-3 px-2 py-3 transition active:scale-95 disabled:opacity-50"
-                >
-                  <span className="absolute right-1 top-1 rounded-full bg-coral px-1 text-[8px] font-bold text-white">
-                    BIG
-                  </span>
-                  <span className="text-2xl">{g.emoji}</span>
-                  <span className="text-center text-[11px] font-semibold leading-tight">
-                    {g.name}
-                  </span>
-                  <span className="text-[10px] font-bold text-gold">
-                    {g.coins} coins
-                  </span>
-                </button>
-              ))}
+              {adult.map((g) => {
+                const unlockOk =
+                  highlightMinCoins != null && g.coins >= highlightMinCoins;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void send(g)}
+                    className={`relative flex flex-col items-center gap-1 overflow-hidden rounded-2xl border px-2 py-3 transition active:scale-95 disabled:opacity-50 ${
+                      unlockOk
+                        ? "border-amber-300/60 bg-gradient-to-b from-amber-400/25 to-coral/20"
+                        : "border-coral/40 bg-gradient-to-b from-coral/20 to-ink-3"
+                    }`}
+                  >
+                    <span className="absolute right-1 top-1 rounded-full bg-coral px-1 text-[8px] font-bold text-white">
+                      {unlockOk ? "UNLOCK" : "BIG"}
+                    </span>
+                    <span className="text-2xl">{g.emoji}</span>
+                    <span className="text-center text-[11px] font-semibold leading-tight">
+                      {g.name}
+                    </span>
+                    <span className="text-[10px] font-bold text-gold">
+                      {g.coins} coins
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {sending && (
