@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Shuffle } from "lucide-react";
 import {
@@ -10,7 +10,9 @@ import {
 import { TopBar } from "@/components/TopBar";
 import { fetchLiveHosts } from "@/lib/api";
 import {
+  catalogDiscoverHosts,
   mergeDiscoverHosts,
+  rotateHosts,
   type DiscoverHost,
 } from "@/lib/discoverHosts";
 
@@ -37,6 +39,27 @@ export default function CallLobbyPage() {
     return () => clearInterval(t);
   }, [refresh]);
 
+  // Auto-rotate the calling feed so it never looks static.
+  const [rotationSeed, setRotationSeed] = useState(() =>
+    Math.floor(Date.now() / 1000),
+  );
+  useEffect(() => {
+    const t = setInterval(() => setRotationSeed((s) => s + 1), 15000);
+    const onVis = () => {
+      if (!document.hidden) setRotationSeed((s) => s + 1);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
+  const displayHosts = useMemo(() => {
+    const src = hosts.length ? hosts : catalogDiscoverHosts("call");
+    return rotateHosts(src, rotationSeed);
+  }, [hosts, rotationSeed]);
+
   return (
     <main className="pb-28">
       <TopBar title="1v1 Calling" subtitle="Private video calls" />
@@ -50,9 +73,9 @@ export default function CallLobbyPage() {
         </Link>
       </div>
 
-      {loading && !hosts.length ? (
+      {loading && !displayHosts.length ? (
         <HostGridSkeleton />
-      ) : hosts.length === 0 ? (
+      ) : displayHosts.length === 0 ? (
         <div className="mx-4 mt-2 rounded-2xl border border-dashed border-line bg-ink-2/60 px-4 py-10 text-center text-sm text-muted">
           No calling hosts right now.
           <br />
@@ -66,7 +89,7 @@ export default function CallLobbyPage() {
         </div>
       ) : (
         <section className="mt-2 grid grid-cols-2 gap-3 px-4 pb-8">
-          {hosts.map((h, i) => (
+          {displayHosts.map((h, i) => (
             <HostGridCard key={h.id} host={h} mode="call" index={i} />
           ))}
         </section>

@@ -14,8 +14,10 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { WalletDiamond } from "@/components/WalletDiamond";
 import { fetchLiveHosts, searchProfileByAppId } from "@/lib/api";
 import {
+  catalogDiscoverHosts,
   filterHosts,
   mergeDiscoverHosts,
+  rotateHosts,
   type DiscoverHost,
 } from "@/lib/discoverHosts";
 import { fetchHomeBanners, type PromoSlide } from "@/lib/homeBanners";
@@ -152,7 +154,37 @@ export function HomeScreen() {
     [filtered],
   );
 
-  const list = tab === "live" ? liveHosts : callingHosts;
+  const baseList = tab === "live" ? liveHosts : callingHosts;
+
+  // Auto-rotation: bump a seed on a timer and whenever the tab becomes visible
+  // so the discovery feed never looks static — profiles reshuffle over time
+  // and on every return to the screen.
+  const [rotationSeed, setRotationSeed] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const t = setInterval(() => setRotationSeed((s) => s + 1), 15000);
+    const onVis = () => {
+      if (!document.hidden) setRotationSeed((s) => s + 1);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
+  // Keep the feed populated with fresh, rotating faces even when the live API
+  // returns nothing (falls back to catalog hosts), then shuffle by the seed.
+  const list = useMemo(() => {
+    let src = baseList;
+    if (src.length === 0) {
+      src = catalogDiscoverHosts(tab === "live" ? "live" : "call").filter(
+        (h) =>
+          region === "All" ||
+          h.country.toLowerCase().includes(region.toLowerCase()),
+      );
+    }
+    return rotateHosts(src, rotationSeed);
+  }, [baseList, tab, region, rotationSeed]);
 
   const runAppIdSearch = async () => {
     const q = query.trim();

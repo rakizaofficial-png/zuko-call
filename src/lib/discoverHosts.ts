@@ -126,6 +126,43 @@ export function mergeDiscoverHosts(live: LiveHost[]): DiscoverHost[] {
     .map(enrichLive);
 }
 
+/**
+ * Catalog hosts presented as online/live so the discovery + matching feeds are
+ * never empty or static — used as a rotating fallback when the live API
+ * returns few/no hosts. Keeps "fresh faces" on screen for engagement.
+ */
+export function catalogDiscoverHosts(mode: "call" | "live"): DiscoverHost[] {
+  return creators.map((c) => {
+    const h = enrichCreator(c);
+    return mode === "live"
+      ? { ...h, live: true, online: true, recentlyActive: true }
+      : { ...h, live: false, online: true, onCall: false, recentlyActive: true };
+  });
+}
+
+/**
+ * Deterministic seeded shuffle (mulberry32 + Fisher–Yates). Given the same
+ * seed the order is stable (so React renders don't thrash within a rotation
+ * tick), while bumping the seed reshuffles — powering the auto-rotating,
+ * never-static host feed.
+ */
+export function rotateHosts<T>(list: T[], seed: number): T[] {
+  if (list.length <= 1) return list;
+  const a = list.slice();
+  let s = (seed >>> 0) || 1;
+  const rand = () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export function filterHosts(
   hosts: DiscoverHost[],
   opts: { query?: string; category?: string },
