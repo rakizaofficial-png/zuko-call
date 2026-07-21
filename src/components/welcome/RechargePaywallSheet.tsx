@@ -93,7 +93,7 @@ export function RechargePaywallSheet({
                   <Zap className="h-3.5 w-3.5" /> Private call paused
                 </p>
                 <h2 className="mt-1 font-display text-[1.35rem] font-extrabold leading-snug text-sand">
-                  30s preview ended — recharge to keep talking with {host.name},
+                  Preview ended — recharge to keep talking with {host.name},
                   or the call will cut.
                 </h2>
               </div>

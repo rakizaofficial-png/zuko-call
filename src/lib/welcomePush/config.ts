@@ -90,13 +90,15 @@ export const WELCOME_PUSH_CONFIG = {
   /** Incoming modal + ringtone auto-end */
   ringDurationMinMs: 22_000,
   ringDurationMaxMs: 35_000,
-  /** 30s free preview after Accept → then recharge popup */
+  /** Fallback only when the preview clip has no duration (photo / load fail) */
   teaserCutMs: 30_000,
+  /** Absolute max preview if metadata never arrives */
+  teaserMaxMs: 120_000,
   /** Paywall wait — if no recharge, call cuts */
   offerSeconds: 20,
   /** Don't reuse these many recent hosts / messages */
   hostCooldownCount: 10,
   messageCooldownCount: 14,
   /** Bump when media / timing rules change */
-  storageKey: "luma_welcome_push_v11_post_recharge_5to9s",
+  storageKey: "luma_welcome_push_v12_video_length_ends_call",
 } as const;

@@ -11,8 +11,9 @@ import { ensurePremiumFemalePool } from "@/lib/welcomePush/premiumFemaleGenerato
 
 /**
  * Simulated premium female incoming-call engine.
- * Fires while browsing home/call/match → photo ring (no bg video) → answer →
- * recharge if broke. Next autopush after paywall is 5–9s later.
+ * Fires while browsing home/call/match → photo ring (no bg video) → Accept →
+ * play preview clip once → when video ends, cut call + recharge popup.
+ * Next autopush after paywall is 5–9s later.
  * Host profile pages use HostProfileAutoCall separately (call from that host).
  */
 export function WelcomePushEngine() {
@@ -45,6 +46,7 @@ export function WelcomePushEngine() {
     rejectIncoming,
     closePaywall,
     hardDisconnectTeaser,
+    onTeaserDuration,
   } = useWelcomePushCall({ enabled });
 
   if (phase === "IDLE") return null;
@@ -70,6 +72,7 @@ export function WelcomePushEngine() {
             host={host}
             previewLeft={previewLeft}
             onHardCut={hardDisconnectTeaser}
+            onDuration={onTeaserDuration}
           />
         )}
       </AnimatePresence>

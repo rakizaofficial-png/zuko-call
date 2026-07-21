@@ -1,9 +1,9 @@
 /**
  * Provided push-call video assets (bundled in /public/push-calls).
- * These portrait clips are attached directly to the incoming push-call /
- * automated video-call UI so a real video renders reliably on mobile — no
- * dependency on remote (Pexels/CDN) URLs that can be blocked or slow on the
- * Android WebView.
+ * These portrait clips are attached to the post-Accept free-preview call UI
+ * so a real video renders reliably on mobile — no dependency on remote
+ * (Pexels/CDN) URLs that can be blocked or slow on the Android WebView.
+ * Incoming ring UI stays photo-only; video plays only after the user answers.
  */
 
 export const PUSH_CALL_VIDEOS = [

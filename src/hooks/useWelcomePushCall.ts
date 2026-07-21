@@ -28,6 +28,7 @@ import { useApp } from "@/lib/store";
  *   live host → instant Agora call route (zero-lag)
  *   demo → TEASER (30s free preview) → PAYWALL_BOOST
  *      → recharge OR offer expires / dismiss → call cut (IDLE)
+ * Preview length = video length; when the clip ends → PAYWALL_BOOST.
  * Next autopush after paywall is strictly 5–9s later.
  */
 
@@ -246,7 +247,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     };
   }, [phase, clearTimers, scheduleNext]);
 
-  // 30s preview tick for UI countdown
+  // Preview countdown — driven by video duration when known; fallback tick only
   useEffect(() => {
     if (phase !== "TEASER_PLAYING") {
       if (previewTick.current) {
@@ -255,8 +256,8 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       }
       return;
     }
-    const total = Math.round(WELCOME_PUSH_CONFIG.teaserCutMs / 1000);
-    setPreviewLeft(total);
+    // Seed with fallback until the player reports real clip length
+    setPreviewLeft(Math.round(WELCOME_PUSH_CONFIG.teaserCutMs / 1000));
     previewTick.current = setInterval(() => {
       setPreviewLeft((s) => Math.max(0, s - 1));
     }, 1000);
@@ -289,11 +290,13 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       router.push(`/call/${encodeURIComponent(host.host_id)}?live=1`);
       return;
     }
-    // Demo / simulated hosts: 30s free preview → recharge popup
+    // Demo / simulated hosts: play preview clip once → recharge when it ends
     setPhase("TEASER_PLAYING");
+    // Wide safety net until player reports real duration (or if no video)
+    if (teaserTimer.current) clearTimeout(teaserTimer.current);
     teaserTimer.current = setTimeout(() => {
       setPhase("PAYWALL_BOOST");
-    }, WELCOME_PUSH_CONFIG.teaserCutMs);
+    }, WELCOME_PUSH_CONFIG.teaserMaxMs);
   }, [clearTimers, host.host_id, host.source, router]);
 
   const closePaywall = useCallback(() => {
@@ -303,9 +306,24 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     scheduleNext(nextPostRechargeDelayMs());
   }, [clearTimers, scheduleNext]);
 
+  /** Video finished (or failed) → cut call + open recharge */
   const hardDisconnectTeaser = useCallback(() => {
-    if (teaserTimer.current) clearTimeout(teaserTimer.current);
+    if (teaserTimer.current) {
+      clearTimeout(teaserTimer.current);
+      teaserTimer.current = null;
+    }
     setPhase("PAYWALL_BOOST");
+  }, []);
+
+  /** Align safety timer + countdown to the natural clip length */
+  const onTeaserDuration = useCallback((seconds: number) => {
+    const secs = Math.max(1, Math.ceil(seconds));
+    setPreviewLeft(secs);
+    if (teaserTimer.current) clearTimeout(teaserTimer.current);
+    // Small buffer past natural end so `ended` wins; still cuts if ended misses
+    teaserTimer.current = setTimeout(() => {
+      setPhase("PAYWALL_BOOST");
+    }, secs * 1000 + 750);
   }, []);
 
   return {
@@ -318,5 +336,6 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     rejectIncoming,
     closePaywall,
     hardDisconnectTeaser,
+    onTeaserDuration,
   };
 }

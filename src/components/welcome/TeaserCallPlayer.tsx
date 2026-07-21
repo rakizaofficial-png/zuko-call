@@ -8,20 +8,31 @@ import { pickRandomConnectLine } from "@/lib/welcomePush/uiCopy";
 import { pickPushCallVideo } from "@/lib/welcomePush/pushCallVideos";
 
 /**
- * 30s free preview — host profile only, then parent opens recharge / cuts call.
+ * Free preview after Accept only — plays the clip once.
+ * When the video ends (or fails), parent cuts the call and opens recharge.
  */
 export function TeaserCallPlayer({
   host,
-  previewLeft = 30,
+  previewLeft: previewLeftProp,
+  onHardCut,
+  onDuration,
 }: {
   host: WelcomePushHost;
   previewLeft?: number;
+  /** Fired when the preview clip finishes (or cannot play) */
   onHardCut?: () => void;
+  /** Reports natural video length in seconds once known */
+  onDuration?: (seconds: number) => void;
 }) {
   const [connectLine] = useState(() => pickRandomConnectLine());
+  const [remaining, setRemaining] = useState(previewLeftProp ?? 0);
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Prefer a bundled provided clip so the video always plays inside the call
-  // form on mobile; fall back to the host's own teaser URL.
+  const endedRef = useRef(false);
+  const onHardCutRef = useRef(onHardCut);
+  const onDurationRef = useRef(onDuration);
+  onHardCutRef.current = onHardCut;
+  onDurationRef.current = onDuration;
+
   const teaserVideo =
     pickPushCallVideo(host.host_id || host.name) || host.teaser_video_url || "";
 
@@ -30,16 +41,76 @@ export function TeaserCallPlayer({
     [host.source],
   );
 
-  // Autoplay the teaser video inside the call form (muted + inline is required
-  // for mobile/WebView autoplay to succeed).
+  const finish = () => {
+    if (endedRef.current) return;
+    endedRef.current = true;
+    onHardCutRef.current?.();
+  };
+
+  // Play once after Accept (this screen only mounts post-answer).
+  // Prefer unmuted — Accept is a user gesture — fall back to muted autoplay.
   useEffect(() => {
+    endedRef.current = false;
     const el = videoRef.current;
-    if (!el || !teaserVideo) return;
-    el.muted = true;
+    if (!el || !teaserVideo) {
+      // No clip → parent fallback timer still applies; nothing to bind
+      return;
+    }
+
+    el.loop = false;
     el.playsInline = true;
-    el.loop = true;
-    void el.play().catch(() => undefined);
+    el.setAttribute("playsinline", "true");
+    el.setAttribute("webkit-playsinline", "true");
+
+    const onMeta = () => {
+      const dur = Number.isFinite(el.duration) ? el.duration : 0;
+      if (dur > 0) {
+        const secs = Math.max(1, Math.ceil(dur));
+        setRemaining(secs);
+        onDurationRef.current?.(secs);
+      }
+    };
+
+    const onTime = () => {
+      if (!Number.isFinite(el.duration) || el.duration <= 0) return;
+      setRemaining(Math.max(0, Math.ceil(el.duration - el.currentTime)));
+    };
+
+    const onEnded = () => finish();
+    const onError = () => finish();
+
+    el.addEventListener("loadedmetadata", onMeta);
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("ended", onEnded);
+    el.addEventListener("error", onError);
+
+    const tryPlay = async () => {
+      el.muted = false;
+      try {
+        await el.play();
+      } catch {
+        el.muted = true;
+        try {
+          await el.play();
+        } catch {
+          finish();
+        }
+      }
+    };
+    void tryPlay();
+
+    return () => {
+      el.removeEventListener("loadedmetadata", onMeta);
+      el.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("ended", onEnded);
+      el.removeEventListener("error", onError);
+      el.pause();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- finish closes over stable refs
   }, [teaserVideo]);
+
+  const displayLeft =
+    remaining > 0 ? remaining : Math.max(0, previewLeftProp ?? 0);
 
   return (
     <motion.div
@@ -55,11 +126,10 @@ export function TeaserCallPlayer({
           className="absolute inset-0 h-full w-full object-cover"
           src={teaserVideo}
           poster={host.avatar}
-          muted
-          loop
-          autoPlay
           playsInline
           preload="auto"
+          controls={false}
+          disablePictureInPicture
         />
       ) : (
         <motion.div
@@ -100,12 +170,12 @@ export function TeaserCallPlayer({
 
       <motion.div
         className="absolute right-4 top-[max(0.75rem,env(safe-area-inset-top))] z-10 rounded-full border border-gold/40 bg-black/50 px-3 py-1.5 backdrop-blur"
-        key={previewLeft}
+        key={displayLeft}
         initial={{ scale: 0.92 }}
         animate={{ scale: 1 }}
       >
         <span className="font-display text-sm font-extrabold tabular-nums text-gold">
-          {String(previewLeft).padStart(2, "0")}s
+          {String(displayLeft).padStart(2, "0")}s
         </span>
       </motion.div>
 
@@ -128,7 +198,7 @@ export function TeaserCallPlayer({
         </p>
         <p className="mt-1 text-xs font-semibold text-cyan/80">{connectLine}</p>
         <p className="mt-2 text-center text-[11px] font-semibold text-white/60">
-          Free preview · recharge after {previewLeft}s to keep talking
+          Free preview · call ends when video ends · recharge to continue
         </p>
       </div>
     </motion.div>

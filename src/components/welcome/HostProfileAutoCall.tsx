@@ -156,9 +156,10 @@ export function HostProfileAutoCall({ host }: { host: DiscoverHost }) {
       return;
     }
     setPhase("TEASER_PLAYING");
+    // Wide safety net until player reports real duration
     teaserTimer.current = setTimeout(() => {
       setPhase("PAYWALL_BOOST");
-    }, WELCOME_PUSH_CONFIG.teaserCutMs);
+    }, WELCOME_PUSH_CONFIG.teaserMaxMs);
   };
 
   return (
@@ -184,6 +185,14 @@ export function HostProfileAutoCall({ host }: { host: DiscoverHost }) {
             onHardCut={() => {
               if (teaserTimer.current) clearTimeout(teaserTimer.current);
               setPhase("PAYWALL_BOOST");
+            }}
+            onDuration={(seconds) => {
+              const secs = Math.max(1, Math.ceil(seconds));
+              setPreviewLeft(secs);
+              if (teaserTimer.current) clearTimeout(teaserTimer.current);
+              teaserTimer.current = setTimeout(() => {
+                setPhase("PAYWALL_BOOST");
+              }, secs * 1000 + 750);
             }}
           />
         )}
