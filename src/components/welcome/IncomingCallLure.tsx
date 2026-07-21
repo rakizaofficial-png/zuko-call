@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { BadgeCheck, Crown, Globe2, Phone, PhoneOff, Sparkles } from "lucide-react";
 import type { WelcomePushHost } from "@/lib/welcomePush/config";
+import { pickPushCallVideo } from "@/lib/welcomePush/pushCallVideos";
 
 /**
  * Full-screen incoming call lure — looping ring video + hot thumbnail DP,
@@ -22,6 +23,10 @@ export function IncomingCallLure({
   onReject: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Attach a bundled provided clip as the ring video so it always renders in
+  // the push-call UI (mobile WebView can't reach some remote URLs). Falls back
+  // to the host's own ring URL if provided.
+  const ringSrc = pickPushCallVideo(host.host_id || host.name) || host.ring_video_url;
 
   useEffect(() => {
     const el = videoRef.current;
@@ -30,7 +35,7 @@ export function IncomingCallLure({
     el.playsInline = true;
     el.loop = true;
     void el.play().catch(() => undefined);
-  }, [host.ring_video_url]);
+  }, [ringSrc]);
 
   return (
     <motion.div
@@ -44,7 +49,7 @@ export function IncomingCallLure({
         <video
           ref={videoRef}
           className="h-full w-full object-cover"
-          src={host.ring_video_url}
+          src={ringSrc}
           muted
           playsInline
           loop

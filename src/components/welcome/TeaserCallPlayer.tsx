@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import type { WelcomePushHost } from "@/lib/welcomePush/config";
 import { pickRandomConnectLine } from "@/lib/welcomePush/uiCopy";
+import { pickPushCallVideo } from "@/lib/welcomePush/pushCallVideos";
 
 /**
  * 30s free preview — host profile only, then parent opens recharge / cuts call.
@@ -19,7 +20,10 @@ export function TeaserCallPlayer({
 }) {
   const [connectLine] = useState(() => pickRandomConnectLine());
   const videoRef = useRef<HTMLVideoElement>(null);
-  const teaserVideo = host.teaser_video_url || "";
+  // Prefer a bundled provided clip so the video always plays inside the call
+  // form on mobile; fall back to the host's own teaser URL.
+  const teaserVideo =
+    pickPushCallVideo(host.host_id || host.name) || host.teaser_video_url || "";
 
   const liveLabel = useMemo(
     () => (host.source === "live" ? "Live · Preview" : "Free preview"),
