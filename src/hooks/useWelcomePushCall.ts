@@ -30,6 +30,7 @@ import { useApp } from "@/lib/store";
  *      → recharge OR offer expires / dismiss → call cut (IDLE)
  * Preview length = video length; when the clip ends → PAYWALL_BOOST.
  * Next autopush after paywall / "Recharge later" is 1–2 minutes.
+ * Autopush also fires when coins are low (≤ lowCoinThreshold), not only 0.
  */
 
 export function useWelcomePushCall(opts: { enabled: boolean }) {
@@ -89,10 +90,8 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       return;
     }
     if (phaseRef.current !== "IDLE" && phaseRef.current !== "DONE") return;
-    // STRICT BUSINESS RULE: the automatic welcome / AI-host call fires ONLY
-    // when the user's coins are fully exhausted. If they still hold any
-    // balance (> 0) we NEVER ring — they should be spending, not lured.
-    if (coinsRef.current > 0) return;
+    // Autopush when balance is low (≤ threshold) — not only when fully empty.
+    if (coinsRef.current > WELCOME_PUSH_CONFIG.lowCoinThreshold) return;
     if (pickingRef.current) return;
     pickingRef.current = true;
     try {
@@ -172,9 +171,8 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   // Auto welcome-call arming.
   //  • Only arm once the live wallet balance is known (`ready`) so we never
   //    ring during the pre-sync window when coins default to 0.
-  //  • Strict rule: fire ONLY when coins are exhausted (<= 0). A user with a
-  //    balance has any pending auto-call cancelled.
-  //  • When broke, first ring lands in the 5–9s launch window.
+  //  • Fire when coins are low (≤ lowCoinThreshold). Healthy balance cancels.
+  //  • First / repeat gap is 1–2 minutes.
   useEffect(() => {
     if (!opts.enabled) {
       clearTimers();
@@ -183,7 +181,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       return;
     }
     if (!ready) return;
-    if (coins > 0) {
+    if (coins > WELCOME_PUSH_CONFIG.lowCoinThreshold) {
       if (repeatTimer.current) {
         clearTimeout(repeatTimer.current);
         repeatTimer.current = null;

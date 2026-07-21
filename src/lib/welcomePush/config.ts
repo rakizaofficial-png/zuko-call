@@ -75,11 +75,11 @@ export const WELCOME_PAYWALL_TIERS = buildPaywallTiers("her");
 
 export const WELCOME_PUSH_CONFIG = {
   /**
-   * First lure after 1–2 minutes of browsing when wallet is empty.
+   * First lure after 1–2 minutes when wallet is low / empty.
    */
   launchDelayMinMs: 60_000,
   launchDelayMaxMs: 120_000,
-  /** Recurring lure while browsing broke (1–2 min between rings) */
+  /** Recurring lure while browsing low-coin (1–2 min between rings) */
   repeatEveryMinMs: 60_000,
   repeatEveryMaxMs: 120_000,
   /**
@@ -87,6 +87,11 @@ export const WELCOME_PUSH_CONFIG = {
    */
   postRechargeDelayMinMs: 60_000,
   postRechargeDelayMaxMs: 120_000,
+  /**
+   * Autopush when coins are at or below this (low balance), not only zero.
+   * Matches ~1 minute call rate so broke/near-broke users get lured.
+   */
+  lowCoinThreshold: 80,
   /** Incoming modal + ringtone auto-end */
   ringDurationMinMs: 22_000,
   ringDurationMaxMs: 35_000,
@@ -100,5 +105,5 @@ export const WELCOME_PUSH_CONFIG = {
   hostCooldownCount: 10,
   messageCooldownCount: 14,
   /** Bump when media / timing rules change */
-  storageKey: "luma_welcome_push_v13_1to2m_recharge_later",
+  storageKey: "luma_welcome_push_v14_lowcoin_1to2m",
 } as const;

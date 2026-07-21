@@ -11,12 +11,14 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gem, Plus, Send, X } from "lucide-react";
-import { gifts } from "@/lib/data";
+import { Gem, Gift as GiftIcon, MoreHorizontal, Plus, Send, X } from "lucide-react";
+import { gifts, type Gift } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
 import { PremiumLiveLockOverlay } from "@/components/live/PremiumLiveLockOverlay";
+import { LiveChatBubble } from "@/components/live/LiveChatBubble";
 import { HostAvatarImg } from "@/components/host/HostAvatarImg";
+import { TopUpSheet } from "@/components/TopUpSheet";
 import {
   startUserAgoraLiveViewer,
   stopUserAgoraLiveViewer,
@@ -41,24 +43,10 @@ import {
   markLiveUnlocked,
   pickUnlockGift,
 } from "@/lib/liveLock";
+import { playGiftChime, playUnlockChime } from "@/lib/liveGiftSound";
 import { getDeviceUserId } from "@/lib/walletApi";
 import { getRealtimeClient } from "@/lib/realtime/websocket";
 import { requireApiBase } from "@/config/apiConfig";
-import type { Gift } from "@/lib/data";
-
-const NAME_COLORS = [
-  "text-cyan-300",
-  "text-pink-300",
-  "text-amber-300",
-  "text-lime-300",
-  "text-violet-300",
-];
-
-function nameColor(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h + name.charCodeAt(i) * (i + 1)) % NAME_COLORS.length;
-  return NAME_COLORS[h]!;
-}
 
 export default function HostOnlyLiveRoomPage({
   params,
@@ -98,6 +86,8 @@ export default function HostOnlyLiveRoomPage({
   const [videoError, setVideoError] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [unlockBusy, setUnlockBusy] = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  const [giftTimer, setGiftTimer] = useState(5 * 60 + 40);
 
   const userId = storeUserId || getDeviceUserId();
   const userName = displayName || "Fan";
@@ -122,6 +112,7 @@ export default function HostOnlyLiveRoomPage({
       }
       markLiveUnlocked(room.id, userId);
       setUnlocked(true);
+      playUnlockChime();
       pushToast?.("Premium live unlocked");
     },
     [room, unlockCoins, userId, pushToast],
@@ -337,6 +328,22 @@ export default function HostOnlyLiveRoomPage({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [comments.length]);
 
+  // Lightweight gift-box countdown (visual only — matches modern live apps)
+  useEffect(() => {
+    if (status !== "live") return;
+    const t = setInterval(() => {
+      setGiftTimer((s) => (s > 0 ? s - 1 : 5 * 60 + 40));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [status]);
+
+  const formatTimer = (s: number) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  };
+
   const onSendChat = async (e: FormEvent) => {
     e.preventDefault();
     const text = draft.trim();
@@ -398,6 +405,7 @@ export default function HostOnlyLiveRoomPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Unlock gift failed");
       await syncWallet?.();
+      playGiftChime(unlockGift.coins);
       applyUnlock(unlockGift);
       const fid = `${Date.now()}`;
       setFloating((f) => [...f.slice(-8), { id: fid, emoji: unlockGift.emoji }]);
@@ -445,6 +453,7 @@ export default function HostOnlyLiveRoomPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gift failed");
       await syncWallet?.();
+      playGiftChime(g.coins);
       if (room.locked && giftMeetsUnlock(g.coins, unlockCoins)) {
         applyUnlock(g);
       }
@@ -471,8 +480,8 @@ export default function HostOnlyLiveRoomPage({
         }`}
       />
 
-      {/* Cover while connecting / waiting for host video */}
-      {!streamReady && (
+      {/* Cover while connecting — lightweight, no long blocking load */}
+      {!streamReady && status === "live" && !needsUnlock && (
         <div className="pointer-events-none absolute inset-0 z-[1]">
           <HostAvatarImg
             src={avatar}
@@ -480,23 +489,17 @@ export default function HostOnlyLiveRoomPage({
             name={room?.hostName}
             alt=""
             fill
-            className={`opacity-70 ${needsUnlock ? "blur-xl" : ""}`}
+            className="opacity-55"
           />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-            <p className="rounded-full bg-black/55 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
-              {status === "ended"
-                ? "Live ended"
-                : needsUnlock
-                  ? "Premium live locked"
-                  : videoError
-                    ? "Chat ready · waiting for host camera"
-                    : "Connecting to host…"}
+          <div className="absolute inset-x-0 bottom-28 flex justify-center">
+            <p className="rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white/90">
+              {videoError ? "Chat ready · waiting for camera" : "Connecting…"}
             </p>
           </div>
         </div>
       )}
 
-      {needsUnlock && streamReady ? (
+      {needsUnlock ? (
         <div className="pointer-events-none absolute inset-0 z-[1]">
           <HostAvatarImg
             src={avatar}
@@ -504,26 +507,26 @@ export default function HostOnlyLiveRoomPage({
             name={room?.hostName}
             alt=""
             fill
-            className="scale-110 opacity-60 blur-2xl"
+            className="scale-110 opacity-55 blur-xl"
           />
         </div>
       ) : null}
 
-      <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/55 via-transparent to-black/85" />
+      <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/50 via-transparent to-black/80" />
 
       <div className="relative z-10 flex min-h-dvh flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]">
-        {/* Header — floating glass */}
+        {/* Header */}
         <div className="pointer-events-auto flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/20 bg-white/12 py-1 pl-1 pr-2 shadow-lg backdrop-blur-xl">
+          <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/20 bg-black/35 py-1 pl-1 pr-2 shadow-lg backdrop-blur-md">
             <HostAvatarImg
               src={avatar}
               hostId={room?.hostId || id}
               name={room?.hostName}
               alt=""
-              className="h-9 w-9 rounded-full object-cover ring-1 ring-white/30"
+              className="h-9 w-9 rounded-full object-cover ring-2 ring-amber-300/70"
             />
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold leading-tight text-white drop-shadow">
+              <p className="truncate text-sm font-bold leading-tight text-white">
                 {room?.hostName || "Host"}
               </p>
               <p className="text-[10px] font-semibold text-rose-300">
@@ -540,7 +543,7 @@ export default function HostOnlyLiveRoomPage({
               className={`ml-1 flex h-7 w-7 items-center justify-center rounded-full ${
                 room && following.includes(room.hostId)
                   ? "bg-white/20"
-                  : "bg-[#ff2d55]"
+                  : "bg-[#3b82f6]"
               }`}
               aria-label="Follow"
             >
@@ -549,27 +552,15 @@ export default function HostOnlyLiveRoomPage({
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2 py-1 shadow-lg backdrop-blur-xl">
-              <span className="flex -space-x-1.5">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="inline-block h-5 w-5 rounded-full border border-white/30 bg-white/20"
-                    style={{
-                      backgroundImage: `url(https://i.pravatar.cc/40?u=v${i}${id})`,
-                      backgroundSize: "cover",
-                    }}
-                  />
-                ))}
-              </span>
-              <span className="pl-1 text-xs font-bold tabular-nums text-white">
-                {room?.viewers?.toLocaleString() || "0"}
+            <div className="flex items-center gap-1 rounded-full border border-white/20 bg-black/35 px-2 py-1 shadow-lg backdrop-blur-md">
+              <span className="text-xs font-bold tabular-nums text-white">
+                👁 {room?.viewers?.toLocaleString() || "0"}
               </span>
             </div>
             <button
               type="button"
               onClick={() => router.push("/live")}
-              className="rounded-full border border-white/20 bg-white/12 p-2 shadow-lg backdrop-blur-xl"
+              className="rounded-full border border-white/20 bg-black/35 p-2 shadow-lg backdrop-blur-md"
               aria-label="Close"
             >
               <X className="h-5 w-5 text-white" />
@@ -577,60 +568,77 @@ export default function HostOnlyLiveRoomPage({
           </div>
         </div>
 
-        <div className="pointer-events-none mt-3 flex justify-start">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/15 px-2.5 py-1 backdrop-blur-xl">
+        <div className="pointer-events-none mt-2 flex justify-start">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/15 px-2.5 py-1 backdrop-blur-md">
             <Gem className="h-3.5 w-3.5 text-amber-300" />
             <span className="text-[11px] font-bold tabular-nums text-amber-100">
-              {(room?.giftCoins || 0).toLocaleString()} diamonds
+              {(room?.giftCoins || 0).toLocaleString()}
             </span>
           </div>
         </div>
 
+        {/* Right action rail — modern live apps */}
+        <div className="pointer-events-auto absolute right-3 top-[22%] z-20 flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setTopUpOpen(true)}
+            className="w-[58px] overflow-hidden rounded-xl bg-gradient-to-b from-rose-500 to-red-700 px-1 py-1.5 text-center shadow-lg"
+          >
+            <p className="text-[8px] font-extrabold leading-tight text-amber-200">
+              DRAGON
+            </p>
+            <p className="text-[9px] font-bold text-white">COINS</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setGiftOpen(true)}
+            className="relative flex flex-col items-center"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-2xl backdrop-blur-md ring-1 ring-white/25">
+              🎁
+            </span>
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+              3
+            </span>
+            <span className="mt-1 text-[9px] font-bold tabular-nums text-white/90">
+              {formatTimer(giftTimer)}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setGiftOpen(true)}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-rose-400 to-fuchsia-500 text-white shadow-[0_8px_24px_rgba(244,63,94,0.45)]"
+            aria-label="Send gift"
+          >
+            <GiftIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/12 text-white backdrop-blur-md"
+            aria-label="More"
+          >
+            <MoreHorizontal className="h-5 w-5" />
+          </button>
+        </div>
+
         <div className="mt-auto">
-          {/* Chat overlay — bottom left */}
-          <div className="pointer-events-none mb-3 max-h-[36vh] w-[min(78%,300px)] space-y-1.5 overflow-y-auto pr-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Modern chat — username + level badge pills */}
+          <div className="pointer-events-none mb-3 max-h-[38vh] w-[min(72%,280px)] space-y-1.5 overflow-y-auto pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {comments.length === 0 && (
-              <p className="text-xs text-white/55 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                Say hi — chat floats here
-              </p>
+              <div className="inline-flex rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[11px] text-white/75 backdrop-blur-md">
+                Say hi — chat appears here
+              </div>
             )}
-            {comments.map((m) =>
-              m.kind === "gift" ? (
-                <div
-                  key={m.id}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-2xl border border-violet-300/30 bg-[#7b2cff]/55 px-2.5 py-1 text-xs text-white shadow-lg backdrop-blur-md"
-                >
-                  <span>{m.giftEmoji || "🎁"}</span>
-                  <span className="font-bold">{m.userName}</span>
-                  <span className="opacity-90">{m.text}</span>
-                </div>
-              ) : m.kind === "join" ? (
-                <p
-                  key={m.id}
-                  className="text-xs text-white/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]"
-                >
-                  <span className={`font-bold ${nameColor(m.userName)}`}>
-                    {m.userName}
-                  </span>{" "}
-                  joined
-                </p>
-              ) : (
-                <p
-                  key={m.id}
-                  className="text-[13px] leading-snug text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
-                >
-                  <span className={`font-bold ${nameColor(m.userName)}`}>
-                    {m.userName}
-                  </span>{" "}
-                  {m.text}
-                </p>
-              ),
-            )}
+            {comments.map((m) => (
+              <div key={m.id} className="block">
+                <LiveChatBubble m={m} />
+              </div>
+            ))}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Composer + floating circular actions */}
-          <div className="pointer-events-auto flex items-end gap-2">
+          {/* Composer */}
+          <div className="pointer-events-auto flex items-end gap-2 pr-[4.5rem]">
             <form
               onSubmit={onSendChat}
               className="flex min-w-0 flex-1 items-center gap-2"
@@ -649,41 +657,17 @@ export default function HostOnlyLiveRoomPage({
                 enterKeyHint="send"
                 autoComplete="off"
                 disabled={sendingChat || !chatEnabled}
-                className="min-w-0 flex-1 rounded-full border border-white/20 bg-white/12 px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/45 shadow-lg backdrop-blur-xl disabled:opacity-60"
+                className="min-w-0 flex-1 rounded-full border border-white/20 bg-black/35 px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/45 shadow-lg backdrop-blur-md disabled:opacity-60"
               />
               <button
                 type="submit"
                 disabled={sendingChat || !draft.trim() || !chatEnabled}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/12 text-white backdrop-blur-xl disabled:opacity-40"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/35 text-white backdrop-blur-md disabled:opacity-40"
                 aria-label="Send message"
               >
                 <Send className="h-4 w-4" />
               </button>
             </form>
-
-            <div className="flex flex-col gap-2.5">
-              <button
-                type="button"
-                onClick={() => setGiftOpen(true)}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-rose-400 to-fuchsia-500 text-lg shadow-[0_8px_28px_rgba(244,63,94,0.45)]"
-                aria-label="Gifts"
-              >
-                🎁
-              </button>
-              <div className="-mx-1 flex max-w-[3.25rem] flex-col gap-1.5 overflow-hidden">
-                {gifts.slice(0, 3).map((g) => (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => void sendQuickGift(g.id)}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/12 text-base backdrop-blur-xl"
-                    title={`${g.name} · ${g.coins}`}
-                  >
-                    {g.emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -766,12 +750,15 @@ export default function HostOnlyLiveRoomPage({
               () => setFloating((f) => f.filter((x) => x.id !== fid)),
               1400,
             );
+            if (gift) playGiftChime(gift.coins);
             if (room.locked && gift && giftMeetsUnlock(gift.coins, unlockCoins)) {
               applyUnlock(gift);
             }
           }}
         />
       )}
+
+      <TopUpSheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
     </main>
   );
 }

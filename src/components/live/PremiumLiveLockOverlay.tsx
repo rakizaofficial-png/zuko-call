@@ -36,7 +36,7 @@ export function PremiumLiveLockOverlay({
         <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-amber-300/40 bg-amber-400/15 text-amber-200 shadow-[0_0_32px_rgba(251,191,36,0.35)]">
           <Lock className="h-6 w-6" />
         </span>
-        <p className="flex items-center gap-1.5 font-display text-2xl font-extrabold text-white drop-shadow">
+        <p className="flex items-center gap-1.5 font-display text-[1.65rem] font-extrabold tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]">
           Enter the Premium live
           <Crown className="h-5 w-5 text-amber-300" />
         </p>

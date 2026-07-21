@@ -50,6 +50,10 @@ function main() {
     "Repeat delay range invalid",
   );
   assert(
+    WELCOME_PUSH_CONFIG.lowCoinThreshold === 80,
+    "Low-coin autocall threshold should be 80",
+  );
+  assert(
     WELCOME_PUSH_CONFIG.postRechargeDelayMinMs === 60_000 &&
       WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs === 120_000,
     "Post-recharge autopush must be 1–2 minutes",
