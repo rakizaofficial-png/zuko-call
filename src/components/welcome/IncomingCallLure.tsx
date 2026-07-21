@@ -66,7 +66,7 @@ export function IncomingCallLure({
 
       <div className="relative z-10 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan">
-          Luma · Private call
+          Zuko · Private call
         </p>
         <motion.span
           className="inline-flex items-center gap-1.5 rounded-full border border-teal/40 bg-teal/15 px-2.5 py-1 text-[10px] font-bold text-teal"

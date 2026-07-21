@@ -159,7 +159,7 @@ export default function ProfilePage() {
         return;
       }
       await syncWallet();
-      pushToast(`+${result.credited} coins → Luma ID ${numericLumaId(id)}`);
+      pushToast(`+${result.credited} coins → Zuko ID ${numericLumaId(id)}`);
     } catch (e: unknown) {
       pushToast(e instanceof Error ? e.message : "Purchase failed");
     } finally {
@@ -207,7 +207,7 @@ export default function ProfilePage() {
   const copyId = async () => {
     try {
       await navigator.clipboard.writeText(lumaId);
-      pushToast("Luma ID copied");
+      pushToast("Zuko ID copied");
     } catch {
       pushToast(lumaId);
     }
@@ -220,7 +220,7 @@ export default function ProfilePage() {
       <header className="sticky top-0 z-30 flex items-center justify-between bg-ink/80 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
         <div>
           <p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-coral">
-            Luma
+            Zuko
           </p>
           <h1 className="font-display text-xl font-bold">Profile</h1>
         </div>
@@ -287,7 +287,7 @@ export default function ProfilePage() {
                   className="flex items-center gap-1.5 text-left"
                 >
                   <span className="font-display text-lg font-bold">
-                    {displayName || "Luma Fan"}
+                    {displayName || "Zuko Fan"}
                   </span>
                   <Pencil className="h-3.5 w-3.5 text-muted" />
                 </button>
@@ -300,7 +300,7 @@ export default function ProfilePage() {
                 onClick={() => void copyId()}
                 className="mt-1 font-mono text-[11px] font-semibold tracking-wider text-cyan/90"
               >
-                Luma ID {lumaId} · tap to copy
+                Zuko ID {lumaId} · tap to copy
               </button>
             </div>
             <button

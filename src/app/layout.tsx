@@ -22,7 +22,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Luma — Premium voice & video calling",
+  title: "Zuko — Premium voice & video calling",
   description:
     "Discover hosts, 1v1 calls, daily rewards, Lucky Spin, VIP, and coins — a premium live calling experience.",
 };

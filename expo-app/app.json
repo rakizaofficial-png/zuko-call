@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Luma",
-    "slug": "luma",
-    "version": "1.0.0",
+    "name": "Zuko",
+    "slug": "zuko",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,15 +14,16 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.luma.user",
+      "bundleIdentifier": "com.zuko.user",
       "infoPlist": {
-        "NSCameraUsageDescription": "Luma needs camera for video calls.",
-        "NSMicrophoneUsageDescription": "Luma needs microphone for calls.",
-        "NSPhotoLibraryUsageDescription": "Luma needs photos for your profile."
+        "NSCameraUsageDescription": "Zuko needs camera for video calls.",
+        "NSMicrophoneUsageDescription": "Zuko needs microphone for calls.",
+        "NSPhotoLibraryUsageDescription": "Zuko needs photos for your profile."
       }
     },
     "android": {
-      "package": "com.luma.user",
+      "package": "com.zuko.user",
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0b0d12"

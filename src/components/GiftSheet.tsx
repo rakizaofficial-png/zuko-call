@@ -46,7 +46,7 @@ export function GiftSheet({
           },
           body: JSON.stringify({
             userId: me,
-            userName: displayName || "Luma Fan",
+            userName: displayName || "Zuko Fan",
             hostId,
             giftId: id,
             roomId,

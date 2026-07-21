@@ -132,7 +132,7 @@ export default function PremiumPage() {
         </Link>
         <div className="min-w-0 flex-1">
           <p className="font-display text-[11px] font-semibold uppercase tracking-[0.22em] text-gold">
-            Luma VIP
+            Zuko VIP
           </p>
           <h1 className="font-display text-xl font-bold">Premium</h1>
         </div>
@@ -177,7 +177,7 @@ export default function PremiumPage() {
           <div className="rounded-2xl border border-teal/30 bg-teal/10 px-4 py-5 text-center">
             <Crown className="mx-auto h-8 w-8 text-gold" />
             <p className="mt-2 font-display text-lg font-bold">
-              You’re on Luma VIP
+              You’re on Zuko VIP
             </p>
             <p className="mt-1 text-sm text-muted">
               Enjoy discounted calls, priority match, and exclusive badges.

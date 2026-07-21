@@ -19,7 +19,7 @@ export function TopBar({
     <header className="sticky top-0 z-30 flex items-center justify-between gap-3 bg-[#06040b]/85 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
       <div className="min-w-0">
         <p className="font-display text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan">
-          Luma Lounge
+          Zuko Lounge
         </p>
         <h1 className="font-display truncate text-xl font-bold leading-tight text-sand">
           {title}

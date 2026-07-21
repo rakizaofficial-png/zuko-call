@@ -54,7 +54,7 @@ export default function SupportPage() {
             Admin Support
           </p>
           <p className="flex items-center gap-1 text-[11px] font-semibold text-[#22c55e]">
-            <ShieldCheck className="h-3 w-3" /> Official Luma help
+            <ShieldCheck className="h-3 w-3" /> Official Zuko help
           </p>
         </div>
       </header>

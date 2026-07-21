@@ -21,10 +21,12 @@ import {
 import { WebView } from "react-native-webview";
 
 /**
- * Fail-safe Expo shell — loads Luma web app in a WebView.
+ * Fail-safe Expo shell — loads Zuko web app in a WebView.
  * NO native FLAG_SECURE / ScreenCapture (those caused Android force-closes).
+ * Full product surface (live video call, coins, gifts, autopush) runs in the
+ * deployed web app at EXPO_PUBLIC_LUMA_WEB_URL.
  */
-const RAW_LUMA_URL =
+const RAW_APP_URL =
   process.env.EXPO_PUBLIC_LUMA_WEB_URL || "https://luma-user.onrender.com";
 
 /**
@@ -35,7 +37,7 @@ const RAW_LUMA_URL =
  * machine's loopback, so rewrite to it. (iOS simulators share the host
  * network, so `localhost` already works there.)
  */
-function resolveLumaUrl(raw: string): string {
+function resolveAppUrl(raw: string): string {
   if (Platform.OS === "android") {
     return raw.replace(
       /(https?:\/\/)(localhost|127\.0\.0\.1)(?=[:/]|$)/i,
@@ -45,11 +47,11 @@ function resolveLumaUrl(raw: string): string {
   return raw;
 }
 
-const LUMA_URL = resolveLumaUrl(RAW_LUMA_URL);
+const APP_URL = resolveAppUrl(RAW_APP_URL);
 
 const TRANSIENT_HTTP = new Set([502, 503, 504]);
 const MAX_AUTO_RETRIES = 4;
-const INSTALL_FILE = `${FileSystem.documentDirectory || ""}luma_install_id.txt`;
+const INSTALL_FILE = `${FileSystem.documentDirectory || ""}zuko_install_id.txt`;
 
 async function loadOrCreateInstallId(): Promise<string> {
   try {
@@ -87,7 +89,7 @@ class AppErrorBoundary extends Component<
       return (
         <SafeAreaView style={styles.root}>
           <View style={styles.center}>
-            <Text style={styles.title}>Luma hit a snag</Text>
+            <Text style={styles.title}>Zuko hit a snag</Text>
             <Text style={styles.sub}>{this.state.error.message}</Text>
             <Pressable
               style={styles.btn}
@@ -107,7 +109,7 @@ class AppErrorBoundary extends Component<
 }
 
 /** Ping Render so free-tier cold starts begin before WebView mounts. */
-async function wakeLuma(url: string, timeoutMs = 90_000): Promise<boolean> {
+async function wakeApp(url: string, timeoutMs = 90_000): Promise<boolean> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -124,7 +126,7 @@ async function wakeLuma(url: string, timeoutMs = 90_000): Promise<boolean> {
   }
 }
 
-function LumaWebShell() {
+function ZukoWebShell() {
   const [ready, setReady] = useState(false);
   const [waking, setWaking] = useState(true);
   const [webKey, setWebKey] = useState(0);
@@ -146,9 +148,9 @@ function LumaWebShell() {
     const boot = async () => {
       setReady(true);
       setWaking(true);
-      setRetryHint("Waking Luma server…");
+      setRetryHint("Waking Zuko server…");
       firstLoadDone.current = false;
-      const ok = await wakeLuma(LUMA_URL);
+      const ok = await wakeApp(APP_URL);
       if (cancelled) return;
       setWaking(false);
       setRetryHint(ok ? "" : "Server still waking — loading anyway…");
@@ -194,11 +196,12 @@ function LumaWebShell() {
     }, delay);
   }, []);
 
-  const source = useMemo(() => ({ uri: LUMA_URL }), []);
+  const source = useMemo(() => ({ uri: APP_URL }), []);
   const showOverlay = waking || (loading && !firstLoadDone.current);
   const installBridge = useMemo(() => {
     if (!installId) return undefined;
     const safe = JSON.stringify(installId);
+    // Keep luma_install_id_v1 key so web wallet/device identity stays continuous
     return `window.__LUMA_INSTALL_ID__=${safe};try{localStorage.setItem('luma_install_id_v1',${safe});}catch(e){}true;`;
   }, [installId]);
 
@@ -208,7 +211,7 @@ function LumaWebShell() {
         <StatusBar style="light" />
         <View style={styles.center}>
           <ActivityIndicator color="#2ee6c5" size="large" />
-          <Text style={styles.meta}>Starting Luma…</Text>
+          <Text style={styles.meta}>Starting Zuko…</Text>
         </View>
       </SafeAreaView>
     );
@@ -220,9 +223,9 @@ function LumaWebShell() {
       <View style={styles.frame}>
         {loadError ? (
           <View style={styles.center}>
-            <Text style={styles.title}>Couldn’t open Luma</Text>
+            <Text style={styles.title}>Couldn’t open Zuko</Text>
             <Text style={styles.sub}>{loadError}</Text>
-            <Text style={styles.meta}>{LUMA_URL}</Text>
+            <Text style={styles.meta}>{APP_URL}</Text>
             <Pressable style={styles.btn} onPress={reload}>
               <Text style={styles.btnText}>Retry</Text>
             </Pressable>
@@ -294,7 +297,7 @@ function LumaWebShell() {
               <View style={styles.loadingOverlay} pointerEvents="none">
                 <ActivityIndicator color="#2ee6c5" size="large" />
                 <Text style={styles.meta}>
-                  {retryHint || (waking ? "Waking Luma…" : "Opening Luma…")}
+                  {retryHint || (waking ? "Waking Zuko…" : "Opening Zuko…")}
                 </Text>
               </View>
             ) : null}
@@ -309,7 +312,7 @@ export default function App() {
   const [shellKey, setShellKey] = useState(0);
   return (
     <AppErrorBoundary onReset={() => setShellKey((k) => k + 1)}>
-      <LumaWebShell key={shellKey} />
+      <ZukoWebShell key={shellKey} />
     </AppErrorBoundary>
   );
 }
