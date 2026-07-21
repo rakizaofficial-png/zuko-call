@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Luma",
-    "slug": "luma-user",
+    "slug": "luma",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -33,16 +33,23 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ],
       "softwareKeyboardLayoutMode": "resize"
     },
     "extra": {
       "lumaWebUrl": "https://luma-user.onrender.com",
       "eas": {
-        "projectId": "92e302d1-bc1e-4210-aec0-95fbd8e0cea8"
+        "projectId": "72436173-8890-4946-ac8e-dea507f20d95"
       }
     },
-    "owner": "salman112211"
+    "owner": "salman112211",
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
   }
 }
