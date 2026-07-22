@@ -216,6 +216,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCoins(wallet.coinBalance);
     setXp(wallet.xp);
     setPremium(wallet.isPremium);
+    try {
+      const { listCoinTransactions, markTxRolledBack } = await import(
+        "@/lib/coinLedger"
+      );
+      for (const t of listCoinTransactions(20).filter((x) => x.status === "pending")) {
+        if (Date.now() - t.at > 120_000) {
+          markTxRolledBack(t.id, "stale pending cleared on sync");
+        }
+      }
+    } catch {
+      /* ignore */
+    }
     return wallet;
   }, []);
 
