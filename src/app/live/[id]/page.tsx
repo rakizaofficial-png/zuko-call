@@ -63,11 +63,10 @@ import {
 import {
   hostAcceptsLiveCalls,
   notifyLivePrivateCallRequest,
-  refundCallReserve,
-  reserveCallMinute,
   saveLivePrivateCallHistory,
 } from "@/lib/livePrivateCall";
 import { startRingingTone, stopRingingTone } from "@/lib/ringingTone";
+import { useChatKeyboard } from "@/hooks/useChatKeyboard";
 
 export default function HostOnlyLiveRoomPage({
   params,
@@ -117,6 +116,7 @@ export default function HostOnlyLiveRoomPage({
   const activeCallIdRef = useRef<string | null>(null);
   const reserveAmountRef = useRef(0);
   const callCancelledRef = useRef(false);
+  const kbInset = useChatKeyboard(status === "live" || status === "loading");
 
   const userId = storeUserId || getDeviceUserId();
   const userName = displayName || "Fan";
@@ -426,34 +426,19 @@ export default function HostOnlyLiveRoomPage({
     callCancelledRef.current = true;
     stopRingingTone();
     const callId = activeCallIdRef.current;
-    const reserved = reserveAmountRef.current;
-    // Clear before await so the start() catch path cannot double-refund
-    reserveAmountRef.current = 0;
     const hostId = room?.hostId || id;
     setCallBusy(false);
+    activeCallIdRef.current = null;
+    reserveAmountRef.current = 0;
     if (callId) {
       try {
         await endCall(callId);
       } catch {
-        /* best effort — refund still proceeds */
+        /* best effort */
       }
     }
-    if (reserved > 0 && callId) {
-      await refundCallReserve({
-        callId,
-        amount: reserved,
-        hostId,
-      });
-      void syncWallet?.();
-      pushToast?.(`${reserved} coins refunded`);
-    }
-    activeCallIdRef.current = null;
     setCallPhase("cancelled");
-    setCallStatusLine(
-      reserved > 0
-        ? "You cancelled the request · coins refunded"
-        : "You cancelled the request",
-    );
+    setCallStatusLine("You cancelled the request");
     saveLivePrivateCallHistory({
       id: callId || `cancel_${Date.now()}`,
       hostId,
@@ -464,7 +449,7 @@ export default function HostOnlyLiveRoomPage({
       status: "cancelled",
       ratePerMinute: liveRate,
     });
-  }, [id, liveRate, room?.hostId, room?.hostName, syncWallet, pushToast]);
+  }, [id, liveRate, room?.hostId, room?.hostName]);
 
   const dismissCallOverlay = useCallback(() => {
     setCallPhase("idle");
@@ -500,21 +485,10 @@ export default function HostOnlyLiveRoomPage({
 
     const hostId = room.hostId;
     let callId: string | null = null;
-
-    const refundIfNeeded = async () => {
-      const amt = reserveAmountRef.current;
-      if (!callId || amt <= 0) return;
-      // Clear first so cancel + catch cannot double-refund
-      reserveAmountRef.current = 0;
-      await refundCallReserve({
-        callId,
-        amount: amt,
-        hostId,
-      });
-      void syncWallet?.();
-    };
+    let rateForCall = liveRate;
 
     try {
+      // Soft hold: balance already checked. Coins charge on accept via billFirst.
       const call = await createCall({
         hostId,
         userId,
@@ -533,36 +507,11 @@ export default function HostOnlyLiveRoomPage({
 
       callId = call.id;
       activeCallIdRef.current = call.id;
-      const rateForReserve = Math.max(
+      rateForCall = Math.max(
         1,
         Math.floor(Number(call.ratePerMinute) || liveRate),
       );
-      setCallStatusLine("Reserving first minute…");
-
-      const reserve = await reserveCallMinute({
-        callId: call.id,
-        amount: rateForReserve,
-        hostId,
-      });
-
-      // Cancel raced the reserve network call — always refund if reserved
-      if (callCancelledRef.current) {
-        stopRingingTone();
-        if (reserve.ok) {
-          reserveAmountRef.current = rateForReserve;
-          await refundIfNeeded();
-          pushToast?.(`${rateForReserve} coins refunded`);
-        }
-        try {
-          await endCall(call.id);
-        } catch {
-          /* ignore */
-        }
-        activeCallIdRef.current = null;
-        return;
-      }
-
-      if (!reserve.ok) {
+      if (coins < rateForCall) {
         stopRingingTone();
         try {
           await endCall(call.id);
@@ -572,23 +521,18 @@ export default function HostOnlyLiveRoomPage({
         activeCallIdRef.current = null;
         setCallBusy(false);
         setCallPhase("missed");
-        setCallStatusLine(reserve.error || "Could not reserve coins");
-        if (/insufficient|enough/i.test(reserve.error || "")) {
-          setTopUpOpen(true);
-        }
+        setCallStatusLine(`Need ${rateForCall} coins for this host`);
+        setTopUpOpen(true);
         return;
       }
 
-      reserveAmountRef.current = rateForReserve;
-      void syncWallet?.();
       setCallStatusLine("Waiting for host…");
-
       void notifyLivePrivateCallRequest({
         hostId,
         callId: call.id,
         userId,
         userName,
-        ratePerMinute: rateForReserve,
+        ratePerMinute: rateForCall,
         roomId: room.id,
       });
 
@@ -596,10 +540,7 @@ export default function HostOnlyLiveRoomPage({
         if (st === "ringing") setCallStatusLine("Ringing host…");
       });
 
-      if (callCancelledRef.current) {
-        await refundIfNeeded();
-        return;
-      }
+      if (callCancelledRef.current) return;
 
       stopRingingTone();
       setCallPhase("connecting");
@@ -609,8 +550,6 @@ export default function HostOnlyLiveRoomPage({
       } catch {
         /* continue into call */
       }
-      // Consume reserve into the call — do not refund after this point
-      reserveAmountRef.current = 0;
       activeCallIdRef.current = null;
       saveLivePrivateCallHistory({
         id: call.id,
@@ -618,17 +557,15 @@ export default function HostOnlyLiveRoomPage({
         hostName: room.hostName || "Host",
         at: Date.now(),
         durationSec: 0,
-        coinsSpent: rateForReserve,
+        coinsSpent: 0,
         status: "accepted",
-        ratePerMinute: rateForReserve,
+        ratePerMinute: rateForCall,
       });
       router.push(
-        `/call/${encodeURIComponent(hostId)}?live=1&acceptedCall=${encodeURIComponent(call.id)}&fromLive=1&reserved=1&reserveRate=${rateForReserve}`,
+        `/call/${encodeURIComponent(hostId)}?live=1&acceptedCall=${encodeURIComponent(call.id)}&fromLive=1&billFirst=1&reserveRate=${rateForCall}`,
       );
     } catch (err) {
       stopRingingTone();
-      // Always attempt refund even if cancel flag is set (race safety)
-      await refundIfNeeded();
       if (callId) {
         try {
           await endCall(callId);
@@ -652,12 +589,12 @@ export default function HostOnlyLiveRoomPage({
       setCallPhase(offline ? "offline" : rejected ? "rejected" : "missed");
       setCallStatusLine(
         offline
-          ? "Host unavailable · coins refunded"
+          ? "Host unavailable"
           : rejected
-            ? "Host declined · coins refunded"
+            ? "Host declined the call"
             : missed
-              ? "No answer · coins refunded"
-              : `${msg} · coins refunded`,
+              ? "Host didn’t answer"
+              : msg,
       );
       saveLivePrivateCallHistory({
         id: callId || `miss_${Date.now()}`,
@@ -667,7 +604,7 @@ export default function HostOnlyLiveRoomPage({
         durationSec: 0,
         coinsSpent: 0,
         status: offline ? "offline" : rejected ? "rejected" : "missed",
-        ratePerMinute: liveRate,
+        ratePerMinute: rateForCall,
       });
     }
   }, [
@@ -680,7 +617,6 @@ export default function HostOnlyLiveRoomPage({
     pushToast,
     room,
     router,
-    syncWallet,
     userId,
     userName,
   ]);
@@ -979,7 +915,10 @@ export default function HostOnlyLiveRoomPage({
           ) : null}
         </div>
 
-        <div className="mt-auto">
+        <div
+          className="mt-auto"
+          style={{ paddingBottom: kbInset > 0 ? kbInset : undefined }}
+        >
           {/* Modern chat — username + level badge pills */}
           <div className="pointer-events-none mb-3 max-h-[38vh] w-[min(72%,280px)] space-y-1.5 overflow-y-auto pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {comments.length === 0 && (

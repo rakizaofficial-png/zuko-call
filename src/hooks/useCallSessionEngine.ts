@@ -189,7 +189,7 @@ export function useCallSessionEngine(opts: {
           setStatusText("Host accepted · joining video…");
           const accepted = await getCall(preAcceptedCallId);
           if (cancelledRef.current) return;
-          if (accepted.status !== "accepted" && accepted.status !== "ringing") {
+          if (accepted.status !== "accepted") {
             throw new Error("Call is no longer available");
           }
           const hosts = await fetchLiveHosts().catch(() => [] as LiveHost[]);

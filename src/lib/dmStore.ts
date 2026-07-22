@@ -79,21 +79,9 @@ function emitUnread() {
   }
 }
 
-/**
- * Total unread across live DM threads plus seed conversations that the user
- * hasn't opened yet. Opening a chat marks it read (`markDmRead`) or converts a
- * seed thread into a DM thread with 0 unread, so the badge only clears after
- * the specific chat is actually viewed.
- */
 export function getTotalUnread(): number {
-  const dms = listDmThreads();
-  const dmUnread = dms.reduce((n, t) => n + (t.unread || 0), 0);
-  const openedHostIds = new Set(dms.map((d) => d.hostId));
-  const seedUnread = seedThreads.reduce(
-    (n, t) => n + (openedHostIds.has(t.creatorId) ? 0 : t.unread || 0),
-    0,
-  );
-  return dmUnread + seedUnread;
+  // Production badge = real DM threads only (no seeded demo unread).
+  return listDmThreads().reduce((n, t) => n + (t.unread || 0), 0);
 }
 
 export function threadIdForHost(hostId: string) {

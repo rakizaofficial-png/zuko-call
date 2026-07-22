@@ -10,7 +10,6 @@ import {
 import { TopBar } from "@/components/TopBar";
 import { fetchLiveHosts } from "@/lib/api";
 import {
-  catalogDiscoverHosts,
   mergeDiscoverHosts,
   rotateHosts,
   uniqueHosts,
@@ -68,8 +67,9 @@ export default function CallLobbyPage() {
   }, []);
 
   const displayHosts = useMemo(() => {
-    const src = hosts.length ? hosts : catalogDiscoverHosts("call");
-    return uniqueHosts(rotateHosts(src, rotationSeed));
+    // Production: never pad with catalog/demo hosts
+    if (!hosts.length) return [];
+    return uniqueHosts(rotateHosts(hosts, rotationSeed));
   }, [hosts, rotationSeed]);
 
   return (

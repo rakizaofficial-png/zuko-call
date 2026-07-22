@@ -66,6 +66,7 @@ export default function CallSessionClient({
   const preAcceptedCallId = search.get("acceptedCall");
   const fromLive = search.get("fromLive") === "1";
   const reservedFirstMinute = search.get("reserved") === "1";
+  const billFirstMinute = search.get("billFirst") === "1";
   const reserveRateParam = Number(search.get("reserveRate") || 0);
   const {
     spendAsync,
@@ -99,7 +100,9 @@ export default function CallSessionClient({
   const [showConnectedBanner, setShowConnectedBanner] = useState(false);
   const [endingOverlay, setEndingOverlay] = useState(false);
   const [coinsSpentUi, setCoinsSpentUi] = useState(0);
-  const hangUpRef = useRef<() => Promise<void>>(async () => undefined);
+  const hangUpRef = useRef<
+    (opts?: { reason?: string; skipNavigate?: boolean }) => Promise<void>
+  >(async () => undefined);
   const trialEndedRef = useRef(false);
   const billingPausedRef = useRef(false);
   const billingBusyRef = useRef(false);
@@ -107,8 +110,9 @@ export default function CallSessionClient({
   const lowBalance60WarnedRef = useRef(false);
   const coinsSpentRef = useRef(0);
   const historySavedRef = useRef(false);
-  const reservedFirstMinuteRef = useRef(reservedFirstMinute);
-  reservedFirstMinuteRef.current = reservedFirstMinute;
+  const firstMinuteBilledRef = useRef(false);
+  const reservedFirstMinuteRef = useRef(reservedFirstMinute || billFirstMinute);
+  reservedFirstMinuteRef.current = reservedFirstMinute || billFirstMinute;
   const openTopUpRef = useRef(openTopUp);
   openTopUpRef.current = openTopUp;
   const feedEndRef = useRef<HTMLDivElement>(null);
@@ -253,30 +257,39 @@ export default function CallSessionClient({
       ? Math.max(1, Math.floor(bridgeCall.ratePerMinute))
       : rate;
 
-  const hangUp = async () => {
+  const hangUp = async (opts?: { reason?: string; skipNavigate?: boolean }) => {
     setEndingOverlay(true);
     // Status → ended first so BOTH sides leave via RTDB listener
-    await disconnect({ reason: "user_hangup" });
+    await disconnect({ reason: opts?.reason || "user_hangup" });
     await stopUserAgoraCall();
     if (isConnected) void completeCallEngagement();
-    if (fromLive && !historySavedRef.current) {
-      historySavedRef.current = true;
-      saveLivePrivateCallHistory({
-        id: bridgeCall?.id || sessionId || `live_end_${Date.now()}`,
-        hostId: liveHost?.id || bridgeCall?.hostId || id,
-        hostName: displayName,
-        at: Date.now(),
-        durationSec: secsRef.current,
-        coinsSpent: coinsSpentRef.current,
-        status: coinsSpentRef.current > 0 && coinsRef.current < chargeRateRef.current
-          ? "insufficient"
-          : "ended",
-        ratePerMinute: chargeRateRef.current || chargeRate,
-      });
-    }
+    persistLiveHistory(
+      opts?.reason === "insufficient_coins" ||
+        (coinsSpentRef.current > 0 &&
+          coinsRef.current < chargeRateRef.current)
+        ? "insufficient"
+        : "ended",
+    );
     pushToast("Call ended");
-    await new Promise((r) => setTimeout(r, 480));
-    router.push(fromLive ? "/live" : "/call");
+    if (!opts?.skipNavigate) {
+      await new Promise((r) => setTimeout(r, 480));
+      router.push(fromLive ? "/live" : "/call");
+    }
+  };
+
+  const persistLiveHistory = (status: "ended" | "insufficient") => {
+    if (!fromLive || historySavedRef.current) return;
+    historySavedRef.current = true;
+    saveLivePrivateCallHistory({
+      id: bridgeCall?.id || sessionId || `live_end_${Date.now()}`,
+      hostId: liveHost?.id || bridgeCall?.hostId || id,
+      hostName: displayName,
+      at: Date.now(),
+      durationSec: secsRef.current,
+      coinsSpent: coinsSpentRef.current,
+      status,
+      ratePerMinute: chargeRateRef.current || chargeRate,
+    });
   };
 
   useEffect(() => {
@@ -297,9 +310,123 @@ export default function CallSessionClient({
     chargeRateRef.current = chargeRate;
   }, [chargeRate]);
 
-  // Live→call reserved the first minute already — reflect spend + sync wallet
+  /** Coins gone → open recharge + hang up cleanly (both sides leave) */
+  const exhaustAndRecharge = useCallback(async (msg?: string) => {
+    setLowBalanceOpen(true);
+    openTopUpRef.current(30);
+    pushToastRef.current(msg || "Coins exhausted — recharge to continue");
+    await hangUpRef.current({ reason: "insufficient_coins" });
+  }, []);
+  const exhaustRef = useRef(exhaustAndRecharge);
+  exhaustRef.current = exhaustAndRecharge;
+
+  // Live→call: bill first minute through /calls/:id/minute so host is credited
   useEffect(() => {
-    if (!isConnected || !reservedFirstMinute) return;
+    if (!isConnected || !billFirstMinute) return;
+    if (firstMinuteBilledRef.current) return;
+    const sid = bridgeCall?.id || sessionId;
+    if (!sid || isAi) return;
+
+    firstMinuteBilledRef.current = true;
+    const prepaid = Math.max(
+      1,
+      Math.floor(reserveRateParam || chargeRate || 0),
+    );
+    const txId = callMinuteTxId(sid, 0);
+    if (hasCompletedTx(txId)) {
+      coinsSpentRef.current = Math.max(coinsSpentRef.current, prepaid);
+      setCoinsSpentUi(coinsSpentRef.current);
+      return;
+    }
+
+    void (async () => {
+      recordPendingTx({
+        id: txId,
+        userId: getDeviceUserId(),
+        hostId: bridgeCall?.hostId || liveHost?.id || id,
+        callId: sid,
+        amount: prepaid,
+        type: "call_minute",
+        reason: `call_minute_${sid}_m0`,
+      });
+      const hostIdForBill = bridgeCall?.hostId || liveHost?.id || id;
+      const expr = await billCallMinute(sid, {
+        clientTxId: txId,
+        minuteIndex: 0,
+        hostId: hostIdForBill,
+      });
+      if (expr.ok) {
+        markTxCompleted(txId);
+        const amt = expr.amount ?? prepaid;
+        coinsSpentRef.current += amt;
+        setCoinsSpentUi(coinsSpentRef.current);
+        setDeductFlash(amt);
+        setTimeout(() => setDeductFlash(null), 900);
+        pushFeed(`−${amt} coins · 1st min`, "bill");
+        if (typeof expr.coinBalance === "number") {
+          applyLocalCoins(expr.coinBalance);
+        } else {
+          await syncWallet?.();
+        }
+        return;
+      }
+      if (expr.exhausted) {
+        markTxFailed(txId, expr.error || "exhausted");
+        await exhaustRef.current("Insufficient balance for first minute");
+        return;
+      }
+      if (isFirebaseReady()) {
+        const fb = await transferCallMinuteFb({
+          userId: getDeviceUserId(),
+          hostId: hostIdForBill,
+          amount: prepaid,
+          callId: sid,
+          minuteIndex: 0,
+          userName: myDisplayName,
+          hostName: displayName,
+        });
+        if (fb.ok) {
+          markTxCompleted(txId);
+          coinsSpentRef.current += fb.amount ?? prepaid;
+          setCoinsSpentUi(coinsSpentRef.current);
+          setDeductFlash(fb.amount ?? prepaid);
+          setTimeout(() => setDeductFlash(null), 900);
+          pushFeed(`−${fb.amount ?? prepaid} coins · 1st min`, "bill");
+          if (typeof fb.userBalance === "number") {
+            applyLocalCoins(fb.userBalance);
+          }
+          return;
+        }
+        if (fb.exhausted) {
+          markTxFailed(txId, "exhausted");
+          await exhaustRef.current("Insufficient balance for first minute");
+          return;
+        }
+      }
+      markTxFailed(txId, expr.error || "first minute billing failed");
+      pushToastRef.current(expr.error || "Could not bill first minute");
+      await exhaustRef.current();
+    })();
+  }, [
+    isConnected,
+    billFirstMinute,
+    bridgeCall?.id,
+    bridgeCall?.hostId,
+    sessionId,
+    isAi,
+    reserveRateParam,
+    chargeRate,
+    liveHost?.id,
+    id,
+    syncWallet,
+    applyLocalCoins,
+    myDisplayName,
+    displayName,
+  ]);
+
+  // Legacy reserved=1 clients: UI-only prepaid window (already spent)
+  useEffect(() => {
+    if (!isConnected || !reservedFirstMinute || billFirstMinute) return;
     const prepaid = Math.max(
       1,
       Math.floor(reserveRateParam || chargeRate || 0),
@@ -312,15 +439,13 @@ export default function CallSessionClient({
       setTimeout(() => setDeductFlash(null), 900);
       pushFeed(`−${prepaid} coins · 1st min reserved`, "bill");
     }
-    // Mark minute 0 as already billed so we never double-charge first minute
     const sid = sessionId || bridgeCall?.id;
-    if (sid) {
-      markTxCompleted(callMinuteTxId(sid, 0));
-    }
+    if (sid) markTxCompleted(callMinuteTxId(sid, 0));
     void syncWallet?.();
   }, [
     isConnected,
     reservedFirstMinute,
+    billFirstMinute,
     reserveRateParam,
     chargeRate,
     syncWallet,
@@ -334,16 +459,6 @@ export default function CallSessionClient({
       lowBalance60WarnedRef.current = false;
     }
   }, [coins, chargeRate]);
-
-  /** Coins gone → open recharge + hang up cleanly (both sides leave) */
-  const exhaustAndRecharge = useCallback(async (msg?: string) => {
-    setLowBalanceOpen(true);
-    openTopUpRef.current(30);
-    pushToastRef.current(msg || "Coins exhausted — recharge to continue");
-    await hangUpRef.current();
-  }, []);
-  const exhaustRef = useRef(exhaustAndRecharge);
-  exhaustRef.current = exhaustAndRecharge;
 
   useEffect(() => {
     if (!isConnected) return;
@@ -557,9 +672,33 @@ export default function CallSessionClient({
   useEffect(() => {
     if (state === "DISCONNECTED") {
       void stopUserAgoraCall();
+      if (fromLive && !historySavedRef.current) {
+        historySavedRef.current = true;
+        saveLivePrivateCallHistory({
+          id: bridgeCall?.id || sessionId || `live_end_${Date.now()}`,
+          hostId: liveHost?.id || bridgeCall?.hostId || id,
+          hostName: displayName,
+          at: Date.now(),
+          durationSec: secsRef.current,
+          coinsSpent: coinsSpentRef.current,
+          status: "ended",
+          ratePerMinute: chargeRateRef.current || chargeRate,
+        });
+      }
       router.push(fromLive ? "/live" : "/call");
     }
-  }, [state, router, fromLive]);
+  }, [
+    state,
+    router,
+    fromLive,
+    bridgeCall?.id,
+    bridgeCall?.hostId,
+    sessionId,
+    liveHost?.id,
+    id,
+    displayName,
+    chargeRate,
+  ]);
 
   useEffect(() => {
     feedEndRef.current?.scrollIntoView({ behavior: "smooth" });

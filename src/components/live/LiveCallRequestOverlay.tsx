@@ -63,10 +63,10 @@ export function LiveCallRequestOverlay({
       ? `${hostName} is live — waiting for accept`
       : phase === "connecting"
         ? "Starting private Agora video…"
-        : phase === "rejected"
-          ? "Reserved coins were refunded"
+          : phase === "rejected"
+          ? "No coins were charged"
           : phase === "missed"
-            ? "Host didn’t answer · coins refunded"
+            ? "Host didn’t answer · no charge"
             : phase === "offline"
               ? "Try again when the host is free"
               : "You cancelled the request");

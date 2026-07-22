@@ -125,7 +125,7 @@ export function LivePrivateCallSheet({
               </p>
               <p className="mt-2 flex items-center gap-1 text-[10px] text-white/45">
                 <ShieldCheck className="h-3 w-3 text-emerald-400" />
-                1 minute reserved · refunded if host declines or you cancel
+                First minute charged when the host accepts · cancel free while waiting
               </p>
             </div>
 

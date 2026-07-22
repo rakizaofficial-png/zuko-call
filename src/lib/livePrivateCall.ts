@@ -3,7 +3,11 @@
  */
 
 import { requireApiBase } from "@/config/apiConfig";
-import { creditCoinsApi, spendCoinsApi, getDeviceUserId } from "@/lib/walletApi";
+import {
+  creditCoinsApi,
+  getDeviceUserId,
+  spendCoinsApi,
+} from "@/lib/walletApi";
 import {
   markTxCompleted,
   markTxFailed,
