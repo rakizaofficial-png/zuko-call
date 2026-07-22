@@ -84,7 +84,7 @@ export default function MessagesPage() {
 
   return (
     <main className="min-h-dvh overflow-x-hidden pb-28">
-      <TopBar title="Chats" subtitle="WhatsApp-style messaging" />
+      <TopBar title="Chats" subtitle="Messages" />
 
       <div className="px-3 pb-2">
         <label className="flex items-center gap-2 rounded-full border border-white/10 bg-ink-2/80 px-3.5 py-2.5">

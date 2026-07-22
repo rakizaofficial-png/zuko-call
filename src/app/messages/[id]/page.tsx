@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Gift, ImagePlus, Smile, Video } from "lucide-react";
+import { ArrowLeft, Gift, ImagePlus, Video } from "lucide-react";
 import { resolveLiveCreator, threads } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
@@ -196,13 +196,16 @@ export default function ChatThreadPage({
       <ChatShell
         scrollKey={scrollKey}
         header={
-          <div className="flex items-center gap-3 px-3 py-3">
-            <Link href="/messages" className="rounded-full bg-ink-3 p-2">
+          <div className="flex items-center gap-2.5 px-2.5 py-2.5">
+            <Link
+              href="/messages"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-sand"
+            >
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <Link
               href={`/host/${encodeURIComponent(hostMeta.id || "x")}`}
-              className="flex min-w-0 flex-1 items-center gap-3"
+              className="flex min-w-0 flex-1 items-center gap-2.5"
             >
               <HostAvatarImg
                 src={pickHostAvatarUrl(
@@ -212,23 +215,28 @@ export default function ChatThreadPage({
                 hostId={hostMeta.id || id}
                 name={hostMeta.name}
                 alt={hostMeta.name}
-                className="h-10 w-10 rounded-full object-cover ring-2 ring-[#ff9f1a]/40"
+                className="h-10 w-10 rounded-full object-cover"
               />
               <div className="min-w-0">
-                <p className="truncate font-display font-bold leading-tight">
+                <p className="truncate text-[15px] font-semibold leading-tight text-sand">
                   {hostMeta.name}
                 </p>
-                <p className="text-[11px] font-semibold text-[#22c55e]">
-                  {hostMeta.online ? "Online now" : "Last seen recently"}
+                <p
+                  className={`text-[12px] font-medium ${
+                    hostMeta.online ? "text-[#00a884]" : "text-white/45"
+                  }`}
+                >
+                  {hostMeta.online ? "Online" : "Offline"}
                 </p>
               </div>
             </Link>
             <WalletDiamond compact />
             <Link
               href={`/call/${encodeURIComponent(hostMeta.id || id)}?live=1`}
-              className="rounded-full bg-[#ff9f1a] p-2.5"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00a884] text-white"
+              aria-label="Video call"
             >
-              <Video className="h-4 w-4 text-black" />
+              <Video className="h-4 w-4" />
             </Link>
           </div>
         }
@@ -238,7 +246,7 @@ export default function ChatThreadPage({
             onChange={setText}
             onSend={() => void send()}
             sending={sending}
-            placeholder="Write a message…"
+            placeholder="Message"
             emojiOpen={emojiOpen}
             onToggleEmoji={() => setEmojiOpen((v) => !v)}
             onEmojiPick={(e) => setText((t) => t + e)}
@@ -248,23 +256,15 @@ export default function ChatThreadPage({
                 <button
                   type="button"
                   onClick={() => setGiftOpen(true)}
-                  className="rounded-full bg-ink-3 p-2.5 text-gold"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#2a3942] text-gold"
                   aria-label="Gift"
                 >
                   <Gift className="h-5 w-5" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEmojiOpen((v) => !v)}
-                  className="rounded-full bg-ink-3 p-2.5 text-sand"
-                  aria-label="Emoji"
-                >
-                  <Smile className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
                   onClick={() => fileRef.current?.click()}
-                  className="rounded-full bg-ink-3 p-2.5 text-sand"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#2a3942] text-sand"
                   aria-label="Share image"
                 >
                   <ImagePlus className="h-5 w-5" />
@@ -278,7 +278,6 @@ export default function ChatThreadPage({
                 />
               </>
             }
-            footerNote="Secure chat · host sees this in CoinCall"
           />
         }
       >

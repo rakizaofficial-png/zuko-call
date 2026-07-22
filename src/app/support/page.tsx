@@ -54,19 +54,19 @@ export default function SupportPage() {
     <ChatShell
       scrollKey={messages.length}
       header={
-        <div className="flex items-center gap-3 px-3 py-3">
-          <Link href="/profile" className="rounded-full bg-ink-3 p-2">
+        <div className="flex items-center gap-2.5 px-2.5 py-2.5">
+          <Link href="/profile" className="flex h-10 w-10 items-center justify-center rounded-full">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-cyan/15 text-cyan">
             <LifeBuoy className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-display font-bold leading-tight">
+            <p className="truncate text-[15px] font-semibold leading-tight">
               Admin Support
             </p>
-            <p className="flex items-center gap-1 text-[11px] font-semibold text-[#22c55e]">
-              <ShieldCheck className="h-3 w-3" /> Official Zuko help
+            <p className="flex items-center gap-1 text-[12px] font-medium text-[#00a884]">
+              <ShieldCheck className="h-3 w-3" /> Official help
             </p>
           </div>
         </div>

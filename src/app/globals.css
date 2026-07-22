@@ -78,6 +78,28 @@ canvas {
   font-family: var(--font-syne), system-ui, sans-serif;
 }
 
+/* Shared UI type scale — profile / chat / menus */
+.text-ui-xs {
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+.text-ui-sm {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.text-ui-md {
+  font-size: 15px;
+  line-height: 1.4;
+}
+.text-ui-title {
+  font-family: var(--font-syne), system-ui, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
 .app-atmosphere {
   background:
     radial-gradient(ellipse 80% 50% at 10% -10%, rgba(255, 42, 122, 0.22), transparent 55%),
