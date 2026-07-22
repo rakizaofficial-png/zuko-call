@@ -21,9 +21,11 @@ export default function LoginPage() {
   const submit = async () => {
     setLoading(true);
     try {
-      const session = await loginAccount({ email, password });
-      pushToast(`Welcome back, ${session.user.name}`);
-      router.replace("/profile");
+      const res = await loginAccount({ email, password });
+      pushToast("OTP sent — verify to continue");
+      const q = new URLSearchParams({ email: res.email });
+      if (res.demoCode) q.set("demo", res.demoCode);
+      router.push(`/otp?${q.toString()}`);
     } catch (e: unknown) {
       pushToast(e instanceof Error ? e.message : "Login failed");
     } finally {
@@ -34,7 +36,7 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Sign in"
-      subtitle="Secure session for your Zuko wallet, calls, and VIP."
+      subtitle="Password + OTP secure login. Session binds to your device wallet."
       footer={
         <>
           New here?{" "}
@@ -69,11 +71,8 @@ export default function LoginPage() {
         </Link>
       </div>
       <AuthPrimaryButton loading={loading} onClick={() => void submit()}>
-        Sign in
+        Continue to OTP
       </AuthPrimaryButton>
-      <p className="pt-1 text-center text-[11px] text-muted">
-        Google Sign-In connects when Play Services + backend OAuth are enabled.
-      </p>
     </AuthShell>
   );
 }

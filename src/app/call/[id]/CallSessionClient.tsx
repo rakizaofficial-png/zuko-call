@@ -24,6 +24,7 @@ import { useCallSessionEngine } from "@/hooks/useCallSessionEngine";
 import { FREE_TRIAL_SECONDS } from "@/lib/engagement";
 import {
   setUserMuted,
+  setUserSpeaker,
   stopUserAgoraCall,
   switchUserCamera,
 } from "@/lib/agora";
@@ -52,6 +53,7 @@ export default function CallSessionClient({
     search.get("live") !== "0" && !/^ai[_-]/i.test(id);
   const isBlur = search.get("blur") === "1";
   const trialParam = search.get("trial") === "1";
+  const audioOnly = search.get("audio") === "1";
   const {
     spendAsync,
     pushToast,
@@ -147,6 +149,7 @@ export default function CallSessionClient({
     hostId: id,
     enabled: true,
     preferLiveBridge,
+    audioOnly,
     onConnected: ({ transport, name }) => {
       pushFeedRef.current(`Connected with ${name}`, "system");
       pushToastRef.current(
@@ -692,7 +695,8 @@ export default function CallSessionClient({
           onClick={() => {
             setSpeakerOn((v) => {
               const next = !v;
-              pushToast(next ? "Speaker on" : "Earpiece");
+              if (!isAi) void setUserSpeaker(next);
+              pushToast(next ? "Speaker on" : "Earpiece volume");
               return next;
             });
           }}

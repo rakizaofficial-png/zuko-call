@@ -1,10 +1,12 @@
 /**
- * Favorites + block + recently viewed (device-local; sync to API later).
+ * Favorites + block + follow + recently viewed + reports (device-local; sync to API).
  */
 
 const FAV_KEY = "zuko_favorites_v1";
 const BLOCK_KEY = "zuko_blocked_v1";
 const RECENT_KEY = "zuko_recent_hosts_v1";
+const FOLLOW_KEY = "zuko_following_v1";
+const REPORT_KEY = "zuko_reports_v1";
 
 function readList(key: string): string[] {
   if (typeof window === "undefined") return [];
@@ -57,6 +59,23 @@ export function unblockHost(hostId: string) {
   );
 }
 
+export function getFollowing(): string[] {
+  return readList(FOLLOW_KEY);
+}
+
+export function setFollowingList(ids: string[]) {
+  writeList(FOLLOW_KEY, ids);
+}
+
+export function toggleFollowLocal(hostId: string): boolean {
+  const list = getFollowing();
+  const next = list.includes(hostId)
+    ? list.filter((id) => id !== hostId)
+    : [hostId, ...list];
+  writeList(FOLLOW_KEY, next);
+  return next.includes(hostId);
+}
+
 export function getRecentlyViewed(): string[] {
   return readList(RECENT_KEY);
 }
@@ -64,4 +83,37 @@ export function getRecentlyViewed(): string[] {
 export function markHostViewed(hostId: string) {
   const next = [hostId, ...getRecentlyViewed().filter((id) => id !== hostId)];
   writeList(RECENT_KEY, next.slice(0, 40));
+}
+
+export type HostReport = {
+  id: string;
+  hostId: string;
+  reason: string;
+  at: number;
+};
+
+export function reportHost(hostId: string, reason: string): HostReport {
+  const report: HostReport = {
+    id: `rpt_${Date.now().toString(36)}`,
+    hostId,
+    reason: reason.trim() || "Inappropriate behavior",
+    at: Date.now(),
+  };
+  try {
+    const raw = localStorage.getItem(REPORT_KEY);
+    const list: HostReport[] = raw ? (JSON.parse(raw) as HostReport[]) : [];
+    localStorage.setItem(
+      REPORT_KEY,
+      JSON.stringify([report, ...list].slice(0, 50)),
+    );
+  } catch {
+    /* ignore */
+  }
+  return report;
+}
+
+export function filterBlockedHosts<T extends { id: string }>(hosts: T[]): T[] {
+  const blocked = new Set(getBlocked());
+  if (!blocked.size) return hosts;
+  return hosts.filter((h) => !blocked.has(h.id));
 }

@@ -36,6 +36,7 @@ export default function ChatThreadPage({
   const [text, setText] = useState("");
   const [giftOpen, setGiftOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [hostTyping, setHostTyping] = useState(false);
   const [sending, setSending] = useState(false);
   const [hostMeta, setHostMeta] = useState({
     id: "",
@@ -123,9 +124,9 @@ export default function ChatThreadPage({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  const send = async (payload?: string) => {
+  const send = async (payload?: string, imageUrl?: string) => {
     const outgoing = (payload ?? text).trim();
-    if (!outgoing || !hostMeta.id || sending) return;
+    if ((!outgoing && !imageUrl) || !hostMeta.id || sending) return;
     if (vipTier === "diamond") triggerEntranceBlast();
     setSending(true);
     const tid = openDmWithHost({
@@ -136,15 +137,22 @@ export default function ChatThreadPage({
     if (!payload) setText("");
     setEmojiOpen(false);
     try {
-      const { mine } = await sendDmMessage(tid, outgoing, {
-        hostId: hostMeta.id,
-        hostName: hostMeta.name,
-        hostAvatar: hostMeta.image,
-      });
+      const { mine } = await sendDmMessage(
+        tid,
+        outgoing || "📷 Photo",
+        {
+          hostId: hostMeta.id,
+          hostName: hostMeta.name,
+          hostAvatar: hostMeta.image,
+          imageUrl,
+        },
+      );
       setMessages((m) => {
         if (m.some((x) => x.id === mine.id)) return m;
         return [...m.filter((x) => !x.id.startsWith("local_")), mine];
       });
+      setHostTyping(true);
+      window.setTimeout(() => setHostTyping(false), 1600);
     } catch (e) {
       if (!payload) setText(outgoing);
       pushToast?.(e instanceof Error ? e.message : "Could not send");
@@ -157,10 +165,14 @@ export default function ChatThreadPage({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    if (file.size > 2_500_000) {
+      pushToast("Image too large — keep under 2.5MB");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
-      void send(`[Photo] ${file.name || "image"}`);
-      pushToast("Image shared in chat");
+      const dataUrl = String(reader.result || "");
+      void send("📷 Photo", dataUrl);
     };
     reader.readAsDataURL(file);
   };
@@ -212,17 +224,28 @@ export default function ChatThreadPage({
             className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}
           >
             <div className="max-w-[85%]">
+              {m.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={m.imageUrl}
+                  alt="Shared"
+                  className="mb-1 max-h-52 w-full rounded-2xl object-cover ring-1 ring-white/15"
+                />
+              ) : null}
               <VipChatBubble tier={vipTier} fromMe={m.from === "me"}>
-                {m.text.startsWith("[Photo]") ? "📷 Photo" : m.text}
+                {m.text}
               </VipChatBubble>
               {m.from === "me" ? (
                 <p className="mt-0.5 text-right text-[10px] text-white/40">
-                  Read
+                  {m.read === false ? "Sent" : "Read"}
                 </p>
               ) : null}
             </div>
           </motion.div>
         ))}
+        {hostTyping ? (
+          <p className="text-xs text-white/45">{hostMeta.name} is typing…</p>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 

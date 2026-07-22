@@ -202,7 +202,7 @@ export default function LivePage() {
   }, [cards, region, tab]);
 
   return (
-    <main className="min-h-dvh bg-[#0b0b0f] text-white">
+    <main className="min-h-dvh overflow-x-hidden bg-[#0b0b0f] pb-28 text-white">
       {/* Top tabs — mobile reference */}
       <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0b0b0f]/95 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-md">
         <div className="flex items-end gap-2">
@@ -294,7 +294,7 @@ export default function LivePage() {
           </Link>
         </div>
       ) : (
-        <section className="mt-3 grid grid-cols-2 gap-2.5 px-3 pb-2">
+        <section className="mt-3 grid grid-cols-2 gap-2.5 px-3 pb-8">
           {filtered.map((card) => (
             <Link
               key={`${card.source}-${card.roomId}-${card.id}`}

@@ -38,7 +38,7 @@ export default function MessagesPage() {
   const empty = dms.length === 0 && catalogThreads.length === 0;
 
   return (
-    <main>
+    <main className="min-h-dvh overflow-x-hidden pb-28">
       <TopBar title="Messages" subtitle="Text hosts anytime." />
 
       {empty ? (
@@ -55,7 +55,7 @@ export default function MessagesPage() {
           </Link>
         </div>
       ) : (
-        <section className="space-y-1 px-3 pb-6">
+        <section className="space-y-1 px-3 pb-8">
           {dms.map((t, i) => (
             <motion.div
               key={t.id}

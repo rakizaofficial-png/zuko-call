@@ -201,10 +201,47 @@ function ZukoWebShell() {
   const installBridge = useMemo(() => {
     if (!installId) return undefined;
     const safe = JSON.stringify(installId);
-    // Keep luma_install_id_v1 key so web wallet/device identity stays continuous.
-    // Auth session (zuko_user_session_v1) lives in WebView localStorage — same
-    // origin as the production web app — for secure session continuity.
-    return `window.__LUMA_INSTALL_ID__=${safe};window.__ZUKO_ANDROID__=1;try{localStorage.setItem('luma_install_id_v1',${safe});localStorage.setItem('zuko_android_shell_v1','1');}catch(e){}true;`;
+    // Identity + Play Billing bridge stub. When react-native-iap is added,
+    // native side should handle ZUKO_IAP_PURCHASE / ZUKO_IAP_RESTORE messages
+    // and resolve window.LumaNativeIap promises.
+    return `
+window.__LUMA_INSTALL_ID__=${safe};
+window.__ZUKO_ANDROID__=1;
+try{
+  localStorage.setItem('luma_install_id_v1',${safe});
+  localStorage.setItem('zuko_android_shell_v1','1');
+}catch(e){}
+window.LumaNativeIap = window.LumaNativeIap || {
+  purchase: function(sku){
+    return new Promise(function(resolve, reject){
+      try {
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.__ZUKO_IAP_CB__ = { resolve: resolve, reject: reject, sku: sku };
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_PURCHASE', sku: sku }));
+          setTimeout(function(){
+            if (window.__ZUKO_IAP_CB__) {
+              window.__ZUKO_IAP_CB__ = null;
+              reject(new Error('Native Play Billing not linked yet — use web checkout'));
+            }
+          }, 2500);
+        } else {
+          reject(new Error('Native bridge unavailable'));
+        }
+      } catch (err) { reject(err); }
+    });
+  },
+  restore: function(){
+    return new Promise(function(resolve, reject){
+      try {
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_RESTORE' }));
+        }
+        resolve({ restored: false });
+      } catch (err) { reject(err); }
+    });
+  }
+};
+true;`;
   }, [installId]);
 
   if (!ready) {
@@ -273,17 +310,35 @@ function ZukoWebShell() {
                 }}
                 javaScriptEnabled
                 domStorageEnabled
-                allowFileAccess
-                allowUniversalAccessFromFileURLs
-                allowFileAccessFromFileURLs
+                allowFileAccess={false}
+                allowUniversalAccessFromFileURLs={false}
+                allowFileAccessFromFileURLs={false}
                 startInLoadingState={false}
                 allowsInlineMediaPlayback
                 mediaPlaybackRequiresUserAction={false}
                 setSupportMultipleWindows={false}
-                originWhitelist={["https://*", "http://*", "file://*"]}
-                mixedContentMode="always"
+                originWhitelist={[
+                  "https://luma-user.onrender.com*",
+                  "https://*.onrender.com*",
+                  "https://*",
+                ]}
+                mixedContentMode="compatibility"
                 androidLayerType="hardware"
                 nestedScrollEnabled
+                onMessage={(event) => {
+                  try {
+                    const data = JSON.parse(event.nativeEvent.data || "{}") as {
+                      type?: string;
+                      sku?: string;
+                    };
+                    if (data.type === "ZUKO_IAP_PURCHASE") {
+                      // Placeholder: wire react-native-iap here for production Play Billing.
+                      console.log("[zuko] IAP purchase request", data.sku);
+                    }
+                  } catch {
+                    /* ignore */
+                  }
+                }}
                 {...(Platform.OS === "ios"
                   ? ({
                       allowsBackForwardNavigationGestures: true,

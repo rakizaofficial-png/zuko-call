@@ -13,7 +13,7 @@ import { useApp } from "@/lib/store";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { pushToast, updateDisplayName } = useApp();
+  const { pushToast } = useApp();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,10 +22,11 @@ export default function RegisterPage() {
   const submit = async () => {
     setLoading(true);
     try {
-      const session = await registerAccount({ email, password, name });
-      await updateDisplayName(session.user.name);
-      pushToast("Account created — welcome to Zuko");
-      router.replace("/profile");
+      const res = await registerAccount({ email, password, name });
+      pushToast("OTP sent — verify to create your account");
+      const q = new URLSearchParams({ email: res.email });
+      if (res.demoCode) q.set("demo", res.demoCode);
+      router.push(`/otp?${q.toString()}`);
     } catch (e: unknown) {
       pushToast(e instanceof Error ? e.message : "Registration failed");
     } finally {
@@ -36,7 +37,7 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Create account"
-      subtitle="Register to sync profile, protect your coins, and join VIP."
+      subtitle="Register with email, then verify OTP before your session starts."
       footer={
         <>
           Already have an account?{" "}
@@ -70,7 +71,7 @@ export default function RegisterPage() {
         placeholder="At least 6 characters"
       />
       <AuthPrimaryButton loading={loading} onClick={() => void submit()}>
-        Register
+        Send OTP
       </AuthPrimaryButton>
       <p className="pt-1 text-center text-[11px] text-muted">
         Wallet balances &amp; prices are server-controlled — never editable by

@@ -16,13 +16,13 @@ import {
   UserRound,
 } from "lucide-react";
 import {
-  clearSession,
   getSession,
+  logoutAccount,
   type AuthSession,
 } from "@/lib/authSession";
+import { getUiLang, setUiLang, t, type LangCode } from "@/lib/i18n";
 import { useApp } from "@/lib/store";
 
-const LANG_KEY = "zuko_ui_lang_v1";
 const NOTIFY_KEY = "zuko_notify_prefs_v1";
 
 type NotifyPrefs = {
@@ -45,14 +45,16 @@ export default function SettingsPage() {
   const router = useRouter();
   const { pushToast } = useApp();
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [lang, setLang] = useState("en");
+  const [lang, setLang] = useState<LangCode>("en");
   const [dark, setDark] = useState(true);
   const [notify, setNotify] = useState<NotifyPrefs>(DEFAULT_NOTIFY);
 
   useEffect(() => {
     setSession(getSession());
     try {
-      setLang(localStorage.getItem(LANG_KEY) || "en");
+      const code = getUiLang();
+      setLang(code);
+      setUiLang(code);
       const isLight = localStorage.getItem("luma_theme") === "light";
       setDark(!isLight);
       document.documentElement.classList.toggle("light", isLight);
@@ -63,10 +65,10 @@ export default function SettingsPage() {
     }
   }, []);
 
-  const saveLang = (v: string) => {
+  const saveLang = (v: LangCode) => {
     setLang(v);
-    localStorage.setItem(LANG_KEY, v);
-    pushToast(v === "en" ? "Language: English" : "Language saved");
+    setUiLang(v);
+    pushToast(t("language", v));
   };
 
   const toggleDark = () => {
@@ -85,9 +87,9 @@ export default function SettingsPage() {
   };
 
   const logout = () => {
-    clearSession();
+    logoutAccount();
     setSession(null);
-    pushToast("Signed out");
+    pushToast("Signed out — session cleared");
     router.push("/login");
   };
 
@@ -101,7 +103,7 @@ export default function SettingsPage() {
           <p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-coral">
             Zuko
           </p>
-          <h1 className="font-display text-xl font-bold">Settings</h1>
+          <h1 className="font-display text-xl font-bold">{t("settings", lang)}</h1>
         </div>
       </header>
 
@@ -137,7 +139,7 @@ export default function SettingsPage() {
         <SettingsGroup title="Appearance">
           <Row
             icon={<Moon className="h-4 w-4" />}
-            label="Dark mode"
+            label={t("darkMode", lang)}
             trailing={
               <button
                 type="button"
@@ -156,11 +158,11 @@ export default function SettingsPage() {
           />
           <Row
             icon={<Languages className="h-4 w-4" />}
-            label="Language"
+            label={t("language", lang)}
             trailing={
               <select
                 value={lang}
-                onChange={(e) => saveLang(e.target.value)}
+                onChange={(e) => saveLang(e.target.value as LangCode)}
                 className="rounded-xl border border-line bg-ink px-2 py-1.5 text-xs outline-none"
               >
                 <option value="en">English</option>
@@ -235,7 +237,7 @@ export default function SettingsPage() {
             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-coral/40 bg-coral/10 text-sm font-bold text-coral"
           >
             <LogOut className="h-4 w-4" />
-            Log out
+            {t("logout", lang)}
           </button>
         ) : null}
 

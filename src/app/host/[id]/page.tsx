@@ -10,6 +10,7 @@ import {
   Flag,
   Heart,
   MapPin,
+  Phone,
   Send,
   Share2,
   Star,
@@ -30,8 +31,11 @@ import {
   blockHost,
   isFavorite,
   markHostViewed,
+  reportHost,
   toggleFavorite,
 } from "@/lib/socialLists";
+import { getAuthHeaders } from "@/lib/authSession";
+import { getDeviceUserId } from "@/lib/walletApi";
 
 async function fetchHostProfile(id: string): Promise<{
   name?: string;
@@ -194,6 +198,28 @@ export default function HostProfilePage({
 
   const onReport = () => {
     setMenuOpen(false);
+    const report = reportHost(host.id, "User report from host profile");
+    void (async () => {
+      try {
+        await fetch(`${requireApiBase()}/support/tickets`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-Id": getDeviceUserId(),
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            category: "report",
+            subject: `Report host ${host.name}`,
+            body: report.reason,
+            hostId: host.id,
+            reportId: report.id,
+          }),
+        });
+      } catch {
+        /* local report retained */
+      }
+    })();
     pushToast("Report submitted — our team will review");
     router.push("/support");
   };
@@ -372,26 +398,37 @@ export default function HostProfilePage({
           </ul>
         </div>
 
-        <div className="mt-4 flex gap-3 pb-2">
-          <button
-            type="button"
-            onClick={openChat}
-            className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-[#222]"
-          >
-            <Send className="h-4 w-4" />
-            Message
-          </button>
-          <Link
-            href={
-              host.live
-                ? `/live/${encodeURIComponent(host.id)}`
-                : `/call/${encodeURIComponent(host.id)}?live=1`
-            }
-            className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#ff9f1a] py-3.5 text-sm font-bold text-black"
-          >
-            <Video className="h-4 w-4" />
-            {host.live ? "Watch Live" : "Video Call"}
-          </Link>
+        <div className="mt-4 flex flex-col gap-3 pb-2">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={openChat}
+              className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-[#222]"
+            >
+              <Send className="h-4 w-4" />
+              Message
+            </button>
+            <Link
+              href={
+                host.live
+                  ? `/live/${encodeURIComponent(host.id)}`
+                  : `/call/${encodeURIComponent(host.id)}?live=1`
+              }
+              className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#ff9f1a] py-3.5 text-sm font-bold text-black"
+            >
+              <Video className="h-4 w-4" />
+              {host.live ? "Watch Live" : "Video Call"}
+            </Link>
+          </div>
+          {!host.live ? (
+            <Link
+              href={`/call/${encodeURIComponent(host.id)}?live=1&audio=1`}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 py-3.5 text-sm font-bold text-white"
+            >
+              <Phone className="h-4 w-4" />
+              Audio Call
+            </Link>
+          ) : null}
         </div>
       </section>
 

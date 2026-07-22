@@ -5,6 +5,7 @@
  */
 
 import { requireApiBase } from "@/config/apiConfig";
+import { getAuthHeaders, getSession } from "@/lib/authSession";
 import {
   adoptRestoredUserId,
   ensureDeviceUserId,
@@ -42,12 +43,17 @@ export function getDeviceUserId() {
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const base = requireApiBase();
+  const session = typeof window !== "undefined" ? getSession() : null;
   const res = await fetch(`${base}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
       "X-User-Id": deviceUserId(),
       "X-Install-Id": ensureInstallId(),
+      ...getAuthHeaders(),
+      ...(session?.user?.id
+        ? { "X-Account-Id": session.user.id }
+        : {}),
       ...(init?.headers || {}),
     },
     cache: "no-store",

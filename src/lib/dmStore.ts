@@ -17,6 +17,9 @@ export type DmMessage = {
   text: string;
   at: number;
   fromId?: string;
+  /** Local data-URL preview for image messages (not uploaded to CDN yet) */
+  imageUrl?: string;
+  read?: boolean;
 };
 
 export type DmThread = {
@@ -199,10 +202,15 @@ export async function syncDmFromApi(hostId: string): Promise<DmMessage[]> {
 export async function sendDmMessage(
   threadId: string,
   text: string,
-  meta?: { hostId: string; hostName: string; hostAvatar?: string },
+  meta?: {
+    hostId: string;
+    hostName: string;
+    hostAvatar?: string;
+    imageUrl?: string;
+  },
 ): Promise<{ mine: DmMessage }> {
   const trimmed = text.trim();
-  if (!trimmed) throw new Error("Empty message");
+  if (!trimmed && !meta?.imageUrl) throw new Error("Empty message");
 
   const userId = getDeviceUserId();
   const hostId = meta?.hostId || threadId.replace(/^dm_/, "");
@@ -210,9 +218,11 @@ export async function sendDmMessage(
   const optimistic: DmMessage = {
     id: `local_${now}`,
     from: "me",
-    text: trimmed,
+    text: trimmed || "📷 Photo",
     at: now,
     fromId: userId,
+    imageUrl: meta?.imageUrl,
+    read: true,
   };
 
   const local = [...getDmMessages(threadId), optimistic];
@@ -257,6 +267,8 @@ export async function sendDmMessage(
     text: saved.text,
     at: saved.createdAt,
     fromId: saved.fromId,
+    imageUrl: meta?.imageUrl,
+    read: true,
   };
   const withoutLocal = getDmMessages(threadId).filter((m) => m.id !== optimistic.id);
   if (!withoutLocal.some((m) => m.id === mine.id)) withoutLocal.push(mine);

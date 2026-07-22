@@ -21,6 +21,7 @@ import {
   sectionHosts,
   type DiscoverHost,
 } from "@/lib/discoverHosts";
+import { filterBlockedHosts } from "@/lib/socialLists";
 import { fetchHomeBanners, type PromoSlide } from "@/lib/homeBanners";
 import { useApp } from "@/lib/store";
 import { useRouter } from "next/navigation";
@@ -168,7 +169,7 @@ export function HomeScreen() {
         h.country.toLowerCase().includes(region.toLowerCase()),
       );
     }
-    return list;
+    return filterBlockedHosts(list);
   }, [hosts, query, region, category]);
 
   const sections = useMemo(() => sectionHosts(filtered), [filtered]);

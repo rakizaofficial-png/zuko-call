@@ -54,10 +54,11 @@ export function useCallSessionEngine(opts: {
   hostId: string;
   enabled: boolean;
   preferLiveBridge: boolean;
+  audioOnly?: boolean;
   onConnected?: (info: { transport: CallTransport; name: string }) => void;
   onFailed?: (message: string) => void;
 }): CallSessionEngine {
-  const { hostId, enabled, preferLiveBridge, onConnected, onFailed } = opts;
+  const { hostId, enabled, preferLiveBridge, audioOnly, onConnected, onFailed } = opts;
   const onConnectedRef = useRef(onConnected);
   const onFailedRef = useRef(onFailed);
   onConnectedRef.current = onConnected;
@@ -316,6 +317,7 @@ export function useCallSessionEngine(opts: {
             uid: token.uid,
             localVideoEl: localRef.current,
             remoteVideoEl: remoteRef.current,
+            audioOnly: Boolean(audioOnly),
           });
           if (cancelledRef.current) return;
           setStatusText(`Connected with ${host.name}`);
@@ -412,7 +414,7 @@ export function useCallSessionEngine(opts: {
       sessionIdRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, hostId, preferLiveBridge]);
+  }, [enabled, hostId, preferLiveBridge, audioOnly]);
 
   const ratePerMinute =
     aiHost?.cost_per_minute ||

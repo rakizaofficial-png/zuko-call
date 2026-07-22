@@ -1,6 +1,6 @@
 {
   "name": "zuko-expo",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "main": "expo/AppEntry.js",
   "scripts": {

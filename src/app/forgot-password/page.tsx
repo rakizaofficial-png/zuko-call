@@ -16,17 +16,18 @@ export default function ForgotPasswordPage() {
   const { pushToast } = useApp();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [demoCode, setDemoCode] = useState<string | null>(null);
 
   const submit = async () => {
     setLoading(true);
     try {
-      const code = await requestPasswordReset(email);
-      setDemoCode(code);
-      pushToast("Reset code ready — enter it on the next screen");
-      router.push(
-        `/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`,
-      );
+      const res = await requestPasswordReset(email);
+      pushToast("Reset OTP ready");
+      const q = new URLSearchParams({
+        email: res.email,
+        mode: "reset",
+      });
+      if (res.demoCode) q.set("demo", res.demoCode);
+      router.push(`/reset-password?${q.toString()}`);
     } catch (e: unknown) {
       pushToast(e instanceof Error ? e.message : "Request failed");
     } finally {
@@ -37,7 +38,7 @@ export default function ForgotPasswordPage() {
   return (
     <AuthShell
       title="Forgot password"
-      subtitle="We’ll issue a short-lived reset code for your account."
+      subtitle="We’ll issue a short-lived OTP to reset your password."
       footer={
         <Link href="/login" className="font-bold text-coral">
           Back to sign in
@@ -53,17 +54,8 @@ export default function ForgotPasswordPage() {
         placeholder="you@email.com"
       />
       <AuthPrimaryButton loading={loading} onClick={() => void submit()}>
-        Send reset code
+        Send reset OTP
       </AuthPrimaryButton>
-      {demoCode ? (
-        <p className="rounded-xl bg-gold/10 px-3 py-2 text-center text-xs text-gold">
-          Demo code: <strong>{demoCode}</strong> (production emails via API)
-        </p>
-      ) : (
-        <p className="text-center text-[11px] text-muted">
-          Production builds email the code securely via the CoinCall API.
-        </p>
-      )}
     </AuthShell>
   );
 }

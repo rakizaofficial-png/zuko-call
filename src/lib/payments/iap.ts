@@ -16,6 +16,7 @@
  */
 
 import { requireApiBase } from "@/config/apiConfig";
+import { getAuthHeaders } from "@/lib/authSession";
 import { getDeviceUserId } from "@/lib/walletApi";
 import { getIapProduct } from "./iapCatalog";
 
@@ -36,6 +37,7 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     headers: {
       "Content-Type": "application/json",
       "X-User-Id": userId,
+      ...getAuthHeaders(),
       ...(init?.headers || {}),
     },
     cache: "no-store",
@@ -60,6 +62,8 @@ export async function verifyIapPurchase(input: {
   const product = getIapProduct(input.productId);
   if (!product) throw new Error(`Unknown productId: ${input.productId}`);
 
+  // Authoritative credit is server-side from productId catalog.
+  // expectedCoins retained for older API handlers only.
   return apiJson<VerifyIapResult>("/wallet/iap/verify", {
     method: "POST",
     body: JSON.stringify({
@@ -70,6 +74,38 @@ export async function verifyIapPurchase(input: {
       expectedCoins: product.coins + product.bonusCoins,
     }),
   });
+}
+
+/** Restore / re-query last Play purchase session after reinstall. */
+export async function restorePurchases(userId?: string): Promise<{
+  restored: boolean;
+  balance?: number;
+  message: string;
+}> {
+  const id = userId || getDeviceUserId();
+  try {
+    const data = await apiJson<{
+      ok?: boolean;
+      balance?: number;
+      restored?: boolean;
+    }>("/wallet/iap/restore", {
+      method: "POST",
+      body: JSON.stringify({ userId: id, platform: "google" }),
+    });
+    return {
+      restored: Boolean(data.restored || data.ok),
+      balance: data.balance,
+      message: data.restored
+        ? "Purchases restored"
+        : "No pending purchases to restore",
+    };
+  } catch (e) {
+    // Fallback: refresh wallet (install-id restore path)
+    return {
+      restored: false,
+      message: e instanceof Error ? e.message : "Restore unavailable",
+    };
+  }
 }
 
 /**
@@ -117,19 +153,40 @@ export async function purchaseCoins(input: {
   if (bridge?.purchase) {
     const product = getIapProduct(input.productId);
     if (!product) throw new Error("Unknown product");
-    const native = await bridge.purchase(product.platformSku.google);
-    return verifyIapPurchase({
-      userId,
-      productId: input.productId,
-      platform: native.platform,
-      purchaseToken: native.purchaseToken,
-    });
+    try {
+      const native = await bridge.purchase(product.platformSku.google);
+      if (native?.purchaseToken) {
+        return verifyIapPurchase({
+          userId,
+          productId: input.productId,
+          platform: native.platform || "google",
+          purchaseToken: native.purchaseToken,
+        });
+      }
+    } catch {
+      // Fall through to hosted Play checkout when native billing isn't linked.
+    }
   }
 
   const session = await createIapCheckoutSession({
     userId,
     productId: input.productId,
+    platform: "google",
   });
-  window.location.href = session.checkoutUrl;
-  return { redirected: true, checkoutUrl: session.checkoutUrl };
+  try {
+    sessionStorage.setItem(
+      "zuko_iap_pending_v1",
+      JSON.stringify({
+        productId: input.productId,
+        sessionId: session.sessionId,
+        at: Date.now(),
+      }),
+    );
+  } catch {
+    /* ignore */
+  }
+  // Route through in-app result screen after return when possible.
+  const checkoutUrl = session.checkoutUrl;
+  window.location.href = checkoutUrl;
+  return { redirected: true, checkoutUrl };
 }

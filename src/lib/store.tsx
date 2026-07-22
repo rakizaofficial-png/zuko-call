@@ -16,6 +16,11 @@ import {
 } from "react";
 import { vipTierFromXp, type VipTier } from "@/lib/ledger";
 import {
+  getFollowing,
+  setFollowingList,
+  toggleFollowLocal,
+} from "@/lib/socialLists";
+import {
   claimDailyCheckIn,
   claimMission,
   claimReferral,
@@ -140,6 +145,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [xp, setXp] = useState(0);
   const [isPremium, setPremium] = useState(false);
   const [following, setFollowing] = useState<string[]>([]);
+
+  useEffect(() => {
+    setFollowing(getFollowing());
+  }, []);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpGrace, setTopUpGrace] = useState(15);
@@ -616,34 +625,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleFollow = useCallback(
     (id: string) => {
-      setFollowing((f) => {
-        const wasFollowing = f.includes(id);
-        const next = wasFollowing ? f.filter((x) => x !== id) : [...f, id];
-        const follow = !wasFollowing;
-        if (follow) setEngagement(recordFollow());
-        if (follow) pushRecentHost(id);
-        void (async () => {
-          try {
-            const { requireApiBase } = await import("@/config/apiConfig");
-            const { getDeviceUserId } = await import("@/lib/walletApi");
-            const me = getDeviceUserId();
-            await fetch(
-              `${requireApiBase()}/hosts/${encodeURIComponent(id)}/follow`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-User-Id": me,
-                },
-                body: JSON.stringify({ userId: me, follow }),
+      const nowFollowing = toggleFollowLocal(id);
+      const next = getFollowing();
+      setFollowingList(next);
+      setFollowing(next);
+      if (nowFollowing) {
+        setEngagement(recordFollow());
+        pushRecentHost(id);
+      }
+      void (async () => {
+        try {
+          const { requireApiBase } = await import("@/config/apiConfig");
+          const { getDeviceUserId } = await import("@/lib/walletApi");
+          const { getAuthHeaders } = await import("@/lib/authSession");
+          const me = getDeviceUserId();
+          await fetch(
+            `${requireApiBase()}/hosts/${encodeURIComponent(id)}/follow`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-User-Id": me,
+                ...getAuthHeaders(),
               },
-            );
-          } catch {
-            /* local follow still works offline */
-          }
-        })();
-        return next;
-      });
+              body: JSON.stringify({ userId: me, follow: nowFollowing }),
+            },
+          );
+        } catch {
+          /* local follow still works offline */
+        }
+      })();
     },
     [],
   );

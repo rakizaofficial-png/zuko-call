@@ -7,6 +7,7 @@ import {
   fetchWalletHistory,
   type WalletLedgerEntry,
 } from "@/lib/walletApi";
+import { restorePurchases } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 
 type Tab = "all" | "recharge" | "spend" | "refund";
@@ -95,6 +96,24 @@ export default function WalletPage() {
             className="mt-4 flex min-h-12 items-center justify-center rounded-2xl bg-coral text-sm font-bold text-white"
           >
             Recharge coins
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              void restorePurchases().then(async (r) => {
+                await syncWallet();
+                pushToast(r.message);
+              });
+            }}
+            className="mt-2 flex min-h-11 w-full items-center justify-center rounded-2xl border border-line bg-ink/50 text-xs font-bold"
+          >
+            Restore Play purchases
+          </button>
+          <Link
+            href="/payment/result?status=success"
+            className="mt-2 block text-center text-[11px] font-semibold text-cyan"
+          >
+            Payment status screen
           </Link>
         </div>
 

@@ -46,6 +46,8 @@ export function BottomNav() {
     pathname === "/register" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
+    pathname === "/otp" ||
+    pathname.startsWith("/payment") ||
     pathname === "/favorites" ||
     pathname === "/referral";
 
