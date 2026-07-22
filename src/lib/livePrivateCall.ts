@@ -142,6 +142,29 @@ export function saveLivePrivateCallHistory(row: LivePrivateCallHistoryRow) {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
     const list = raw ? (JSON.parse(raw) as LivePrivateCallHistoryRow[]) : [];
+    const terminal = new Set([
+      "ended",
+      "rejected",
+      "missed",
+      "cancelled",
+      "insufficient",
+      "offline",
+    ]);
+    const idx = list.findIndex((r) => r.id === row.id);
+    if (idx >= 0) {
+      const prev = list[idx];
+      // Don't overwrite a terminal row with intermediate "accepted"
+      if (terminal.has(prev.status) && row.status === "accepted") {
+        return;
+      }
+      const merged = { ...prev, ...row };
+      const rest = list.filter((r) => r.id !== row.id);
+      localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify([merged, ...rest].slice(0, 80)),
+      );
+      return;
+    }
     list.unshift(row);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 80)));
   } catch {

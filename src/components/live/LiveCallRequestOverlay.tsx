@@ -34,7 +34,8 @@ export function LiveCallRequestOverlay({
   onDismiss: () => void;
 }) {
   const visible = phase !== "idle";
-  const waiting = phase === "ringing" || phase === "connecting";
+  const waiting = phase === "ringing";
+  const connecting = phase === "connecting";
   const failed =
     phase === "rejected" ||
     phase === "missed" ||
@@ -80,7 +81,7 @@ export function LiveCallRequestOverlay({
           exit={{ opacity: 0 }}
         >
           <div className="relative">
-            {waiting ? (
+            {waiting || connecting ? (
               <>
                 <motion.span
                   className="absolute -inset-6 rounded-full border-2 border-coral/50"
@@ -97,13 +98,16 @@ export function LiveCallRequestOverlay({
             <motion.div
               className="relative h-28 w-28 overflow-hidden rounded-full border-[3px] border-white/90 shadow-[0_0_40px_rgba(255,42,122,0.45)]"
               animate={
-                waiting
+                waiting || connecting
                   ? { scale: [1, 1.04, 1] }
                   : failed
                     ? { scale: [1, 0.96, 1] }
                     : {}
               }
-              transition={{ duration: 1.2, repeat: waiting ? Infinity : 0 }}
+              transition={{
+                duration: 1.2,
+                repeat: waiting || connecting ? Infinity : 0,
+              }}
             >
               <HostAvatarImg
                 src={hostAvatar}
@@ -131,7 +135,7 @@ export function LiveCallRequestOverlay({
             {subtitle}
           </p>
 
-          {waiting ? (
+          {waiting || connecting ? (
             <div className="mt-8 flex items-center gap-2">
               {[0, 1, 2].map((i) => (
                 <motion.span
@@ -161,6 +165,10 @@ export function LiveCallRequestOverlay({
                 Cancel request
               </span>
             </button>
+          ) : connecting ? (
+            <p className="mt-10 text-[11px] font-bold uppercase tracking-wider text-cyan-200/80">
+              Please wait — joining private call
+            </p>
           ) : (
             <button
               type="button"

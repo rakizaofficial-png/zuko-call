@@ -66,6 +66,7 @@ export default function CallSessionClient({
   const preAcceptedCallId = search.get("acceptedCall");
   const fromLive = search.get("fromLive") === "1";
   const reservedFirstMinute = search.get("reserved") === "1";
+  const reserveRateParam = Number(search.get("reserveRate") || 0);
   const {
     spendAsync,
     pushToast,
@@ -106,6 +107,8 @@ export default function CallSessionClient({
   const lowBalance60WarnedRef = useRef(false);
   const coinsSpentRef = useRef(0);
   const historySavedRef = useRef(false);
+  const reservedFirstMinuteRef = useRef(reservedFirstMinute);
+  reservedFirstMinuteRef.current = reservedFirstMinute;
   const openTopUpRef = useRef(openTopUp);
   openTopUpRef.current = openTopUp;
   const feedEndRef = useRef<HTMLDivElement>(null);
@@ -296,16 +299,34 @@ export default function CallSessionClient({
 
   // Live→call reserved the first minute already — reflect spend + sync wallet
   useEffect(() => {
-    if (!isConnected || !reservedFirstMinute || chargeRate <= 0) return;
-    if (coinsSpentRef.current < chargeRate) {
-      coinsSpentRef.current = chargeRate;
-      setCoinsSpentUi(chargeRate);
-      setDeductFlash(chargeRate);
+    if (!isConnected || !reservedFirstMinute) return;
+    const prepaid = Math.max(
+      1,
+      Math.floor(reserveRateParam || chargeRate || 0),
+    );
+    if (prepaid <= 0) return;
+    if (coinsSpentRef.current < prepaid) {
+      coinsSpentRef.current = prepaid;
+      setCoinsSpentUi(prepaid);
+      setDeductFlash(prepaid);
       setTimeout(() => setDeductFlash(null), 900);
-      pushFeed(`−${chargeRate} coins · 1st min reserved`, "bill");
+      pushFeed(`−${prepaid} coins · 1st min reserved`, "bill");
+    }
+    // Mark minute 0 as already billed so we never double-charge first minute
+    const sid = sessionId || bridgeCall?.id;
+    if (sid) {
+      markTxCompleted(callMinuteTxId(sid, 0));
     }
     void syncWallet?.();
-  }, [isConnected, reservedFirstMinute, chargeRate, syncWallet]);
+  }, [
+    isConnected,
+    reservedFirstMinute,
+    reserveRateParam,
+    chargeRate,
+    syncWallet,
+    sessionId,
+    bridgeCall?.id,
+  ]);
 
   useEffect(() => {
     if (maxCallMinutes(coins, chargeRate) > 1) {
@@ -382,7 +403,10 @@ export default function CallSessionClient({
       }
 
       // Strict: cannot afford host rate → disconnect both sides + recharge
-      if (bal < charge && next > 2) {
+      // Prepaid first minute from Live covers seconds 1–60 even if balance is 0.
+      const prepaidWindow =
+        reservedFirstMinuteRef.current && next > 0 && next < 60;
+      if (bal < charge && next > 2 && !prepaidWindow) {
         void exhaustRef.current("Insufficient balance, please recharge");
         return;
       }
@@ -399,10 +423,20 @@ export default function CallSessionClient({
             const chargeNow = chargeRateRef.current;
             const coinsNow = coinsRef.current;
 
+            // next=60 → minuteIndex 1 (second minute). Minute 0 was prepaid via reserve.
             const minuteIndex = Math.floor(next / 60);
             const txId = callMinuteTxId(billSessionId, minuteIndex);
             if (hasCompletedTx(txId)) {
               billingBusyRef.current = false;
+              return;
+            }
+
+            // At end of prepaid minute with no remaining balance → end gracefully
+            if (coinsNow < chargeNow) {
+              billingBusyRef.current = false;
+              await exhaustRef.current(
+                "First minute ended — recharge to continue",
+              );
               return;
             }
 

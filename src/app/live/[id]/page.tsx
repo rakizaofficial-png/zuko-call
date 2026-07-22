@@ -427,13 +427,15 @@ export default function HostOnlyLiveRoomPage({
     stopRingingTone();
     const callId = activeCallIdRef.current;
     const reserved = reserveAmountRef.current;
+    // Clear before await so the start() catch path cannot double-refund
+    reserveAmountRef.current = 0;
     const hostId = room?.hostId || id;
     setCallBusy(false);
     if (callId) {
       try {
         await endCall(callId);
       } catch {
-        /* best effort */
+        /* best effort — refund still proceeds */
       }
     }
     if (reserved > 0 && callId) {
@@ -442,13 +444,16 @@ export default function HostOnlyLiveRoomPage({
         amount: reserved,
         hostId,
       });
-      reserveAmountRef.current = 0;
       void syncWallet?.();
       pushToast?.(`${reserved} coins refunded`);
     }
     activeCallIdRef.current = null;
     setCallPhase("cancelled");
-    setCallStatusLine("You cancelled the request · coins refunded");
+    setCallStatusLine(
+      reserved > 0
+        ? "You cancelled the request · coins refunded"
+        : "You cancelled the request",
+    );
     saveLivePrivateCallHistory({
       id: callId || `cancel_${Date.now()}`,
       hostId,
@@ -496,6 +501,19 @@ export default function HostOnlyLiveRoomPage({
     const hostId = room.hostId;
     let callId: string | null = null;
 
+    const refundIfNeeded = async () => {
+      const amt = reserveAmountRef.current;
+      if (!callId || amt <= 0) return;
+      // Clear first so cancel + catch cannot double-refund
+      reserveAmountRef.current = 0;
+      await refundCallReserve({
+        callId,
+        amount: amt,
+        hostId,
+      });
+      void syncWallet?.();
+    };
+
     try {
       const call = await createCall({
         hostId,
@@ -515,13 +533,35 @@ export default function HostOnlyLiveRoomPage({
 
       callId = call.id;
       activeCallIdRef.current = call.id;
+      const rateForReserve = Math.max(
+        1,
+        Math.floor(Number(call.ratePerMinute) || liveRate),
+      );
       setCallStatusLine("Reserving first minute…");
 
       const reserve = await reserveCallMinute({
         callId: call.id,
-        amount: liveRate,
+        amount: rateForReserve,
         hostId,
       });
+
+      // Cancel raced the reserve network call — always refund if reserved
+      if (callCancelledRef.current) {
+        stopRingingTone();
+        if (reserve.ok) {
+          reserveAmountRef.current = rateForReserve;
+          await refundIfNeeded();
+          pushToast?.(`${rateForReserve} coins refunded`);
+        }
+        try {
+          await endCall(call.id);
+        } catch {
+          /* ignore */
+        }
+        activeCallIdRef.current = null;
+        return;
+      }
+
       if (!reserve.ok) {
         stopRingingTone();
         try {
@@ -538,7 +578,8 @@ export default function HostOnlyLiveRoomPage({
         }
         return;
       }
-      reserveAmountRef.current = liveRate;
+
+      reserveAmountRef.current = rateForReserve;
       void syncWallet?.();
       setCallStatusLine("Waiting for host…");
 
@@ -547,7 +588,7 @@ export default function HostOnlyLiveRoomPage({
         callId: call.id,
         userId,
         userName,
-        ratePerMinute: liveRate,
+        ratePerMinute: rateForReserve,
         roomId: room.id,
       });
 
@@ -555,7 +596,10 @@ export default function HostOnlyLiveRoomPage({
         if (st === "ringing") setCallStatusLine("Ringing host…");
       });
 
-      if (callCancelledRef.current) return;
+      if (callCancelledRef.current) {
+        await refundIfNeeded();
+        return;
+      }
 
       stopRingingTone();
       setCallPhase("connecting");
@@ -565,6 +609,7 @@ export default function HostOnlyLiveRoomPage({
       } catch {
         /* continue into call */
       }
+      // Consume reserve into the call — do not refund after this point
       reserveAmountRef.current = 0;
       activeCallIdRef.current = null;
       saveLivePrivateCallHistory({
@@ -573,31 +618,17 @@ export default function HostOnlyLiveRoomPage({
         hostName: room.hostName || "Host",
         at: Date.now(),
         durationSec: 0,
-        coinsSpent: liveRate,
+        coinsSpent: rateForReserve,
         status: "accepted",
-        ratePerMinute: liveRate,
+        ratePerMinute: rateForReserve,
       });
       router.push(
-        `/call/${encodeURIComponent(hostId)}?live=1&acceptedCall=${encodeURIComponent(call.id)}&fromLive=1&reserved=1`,
+        `/call/${encodeURIComponent(hostId)}?live=1&acceptedCall=${encodeURIComponent(call.id)}&fromLive=1&reserved=1&reserveRate=${rateForReserve}`,
       );
     } catch (err) {
       stopRingingTone();
-      if (callCancelledRef.current) return;
-
-      const msg = err instanceof Error ? err.message : "Call failed";
-      const offline = /offline|unavailable|network|fetch/i.test(msg);
-      const rejected = /declined|rejected/i.test(msg);
-      const missed = /missed|did not answer|didn't answer|timeout/i.test(msg);
-
-      if (callId && reserveAmountRef.current > 0) {
-        await refundCallReserve({
-          callId,
-          amount: reserveAmountRef.current,
-          hostId,
-        });
-        reserveAmountRef.current = 0;
-        void syncWallet?.();
-      }
+      // Always attempt refund even if cancel flag is set (race safety)
+      await refundIfNeeded();
       if (callId) {
         try {
           await endCall(callId);
@@ -606,6 +637,17 @@ export default function HostOnlyLiveRoomPage({
         }
       }
       activeCallIdRef.current = null;
+
+      if (callCancelledRef.current) {
+        setCallBusy(false);
+        return;
+      }
+
+      const msg = err instanceof Error ? err.message : "Call failed";
+      const offline = /offline|unavailable|network|fetch/i.test(msg);
+      const rejected = /declined|rejected/i.test(msg);
+      const missed = /missed|did not answer|didn't answer|timeout/i.test(msg);
+
       setCallBusy(false);
       setCallPhase(offline ? "offline" : rejected ? "rejected" : "missed");
       setCallStatusLine(
