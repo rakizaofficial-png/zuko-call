@@ -26,8 +26,8 @@ const baseHost: LiveHost = {
 function scenarioAccepts() {
   assert(hostAcceptsLiveCalls(baseHost).ok, "live host should accept");
   assert(
-    !hostAcceptsLiveCalls({ ...baseHost, readyToCall: false }).ok,
-    "readyToCall=false should block",
+    hostAcceptsLiveCalls({ ...baseHost, readyToCall: false }).ok,
+    "live host should accept even if readyToCall lags false",
   );
   assert(
     !hostAcceptsLiveCalls({ ...baseHost, isOnCall: true }).ok,

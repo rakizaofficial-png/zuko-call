@@ -140,7 +140,15 @@ export function LivePrivateCallSheet({
             ) : null}
 
             <div className="mt-4 flex gap-2">
-              {!enough || !acceptsCalls ? (
+              {!acceptsCalls ? (
+                <button
+                  type="button"
+                  disabled
+                  className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/10 font-display text-sm font-extrabold text-white/45"
+                >
+                  Unavailable
+                </button>
+              ) : !enough ? (
                 <button
                   type="button"
                   onClick={onRecharge}

@@ -213,12 +213,48 @@ export async function joinLiveRoomPaid(
   };
 }
 
-export async function fetchLiveAgoraToken(channel: string, uid: number) {
+export async function fetchLiveAgoraToken(
+  channel: string,
+  uid: number,
+  opts?: { userId?: string; hostId?: string },
+) {
   const qs = new URLSearchParams({
     channel,
     uid: String(uid),
     role: "subscriber",
   });
+  if (opts?.userId) qs.set("userId", opts.userId);
+  if (opts?.hostId) qs.set("hostId", opts.hostId);
+
+  // Prefer /live/token — enforces coin-locked entry when userId is present.
+  const liveRes = await fetch(`${requireApiBase()}/live/token?${qs}`, {
+    cache: "no-store",
+    headers: opts?.userId ? { "X-User-Id": opts.userId } : undefined,
+  });
+  if (liveRes.ok) {
+    return (await liveRes.json()) as {
+      token: string;
+      appId: string;
+      uid: number;
+      channel: string;
+    };
+  }
+  const liveData = (await liveRes.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  if (liveRes.status === 402) {
+    const err = new Error(
+      String(liveData.error || "Payment required to enter live"),
+    );
+    (err as Error & { status?: number; entryFee?: number }).status = 402;
+    (err as Error & { entryFee?: number }).entryFee = Number(
+      liveData.entryFee || 0,
+    );
+    throw err;
+  }
+
+  // Legacy fallback for older API deployments
   const res = await fetch(`${requireApiBase()}/agora/token?${qs}`, {
     cache: "no-store",
   });

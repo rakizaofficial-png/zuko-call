@@ -41,15 +41,22 @@ export function hostAcceptsLiveCalls(host: LiveHost | null | undefined): {
   reason?: string;
 } {
   if (!host) return { ok: false, reason: "Host unavailable" };
-  if (!host.isLive && !host.isOnline) {
+  // Live hosts are always callable from Live → Private Video Call.
+  // Presence readyToCall can lag; the /calls API remains authoritative.
+  if (host.isLive) {
+    if (host.isOnCall) {
+      return { ok: false, reason: "Host is already on a private call" };
+    }
+    return { ok: true };
+  }
+  if (!host.isOnline) {
     return { ok: false, reason: "Host is offline" };
   }
   if (host.isOnCall) {
     return { ok: false, reason: "Host is already on a private call" };
   }
-  // Explicit opt-out when backend sets readyToCall=false while live
-  if (host.readyToCall === false && host.isLive) {
-    return { ok: false, reason: "Host is not accepting private calls from Live" };
+  if (host.readyToCall === false) {
+    return { ok: false, reason: "Host is not accepting private calls" };
   }
   return { ok: true };
 }
