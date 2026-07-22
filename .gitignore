@@ -51,3 +51,4 @@ expo-app/android/
 expo-app/ios/
 *.apk
 expo-app/dist/
+CoinCall/

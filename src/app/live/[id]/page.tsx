@@ -5,18 +5,24 @@ import {
   use,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gem, Gift as GiftIcon, MoreHorizontal, Plus, Send, X } from "lucide-react";
+import { Gem, Gift as GiftIcon, Plus, Send, Video, X } from "lucide-react";
 import { gifts, type Gift } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
 import { PremiumLiveLockOverlay } from "@/components/live/PremiumLiveLockOverlay";
 import { LiveChatBubble } from "@/components/live/LiveChatBubble";
+import { LivePrivateCallSheet } from "@/components/live/LivePrivateCallSheet";
+import {
+  LiveCallRequestOverlay,
+  type LiveCallRequestPhase,
+} from "@/components/live/LiveCallRequestOverlay";
 import { HostAvatarImg } from "@/components/host/HostAvatarImg";
 import { TopUpSheet } from "@/components/TopUpSheet";
 import {
@@ -47,6 +53,20 @@ import { playGiftChime, playUnlockChime } from "@/lib/liveGiftSound";
 import { getDeviceUserId } from "@/lib/walletApi";
 import { getRealtimeClient } from "@/lib/realtime/websocket";
 import { requireApiBase } from "@/config/apiConfig";
+import {
+  createCall,
+  endCall,
+  fetchHostProfile,
+  waitForAccept,
+  type LiveHost,
+} from "@/lib/api";
+import {
+  hostAcceptsLiveCalls,
+  notifyLivePrivateCallRequest,
+  saveLivePrivateCallHistory,
+} from "@/lib/livePrivateCall";
+import { startRingingTone, stopRingingTone } from "@/lib/ringingTone";
+import { useChatKeyboard } from "@/hooks/useChatKeyboard";
 
 export default function HostOnlyLiveRoomPage({
   params,
@@ -88,6 +108,15 @@ export default function HostOnlyLiveRoomPage({
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [giftTimer, setGiftTimer] = useState(5 * 60 + 40);
+  const [callSheetOpen, setCallSheetOpen] = useState(false);
+  const [callPhase, setCallPhase] = useState<LiveCallRequestPhase>("idle");
+  const [callStatusLine, setCallStatusLine] = useState("");
+  const [callBusy, setCallBusy] = useState(false);
+  const [liveHostProfile, setLiveHostProfile] = useState<LiveHost | null>(null);
+  const activeCallIdRef = useRef<string | null>(null);
+  const reserveAmountRef = useRef(0);
+  const callCancelledRef = useRef(false);
+  const kbInset = useChatKeyboard(status === "live" || status === "loading");
 
   const userId = storeUserId || getDeviceUserId();
   const userName = displayName || "Fan";
@@ -336,6 +365,261 @@ export default function HostOnlyLiveRoomPage({
     }, 1000);
     return () => clearInterval(t);
   }, [status]);
+
+  // Host profile → call rate + accepts-live-calls flag
+  useEffect(() => {
+    const hostId = room?.hostId;
+    if (!hostId) return;
+    let cancelled = false;
+    void fetchHostProfile(hostId).then((profile) => {
+      if (!cancelled && profile) setLiveHostProfile(profile);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.hostId]);
+
+  useEffect(() => {
+    return () => {
+      stopRingingTone();
+    };
+  }, []);
+
+  const liveRate = useMemo(() => {
+    const fromProfile = Number(liveHostProfile?.ratePerMinute ?? 0);
+    if (fromProfile > 0) return fromProfile;
+    return 60;
+  }, [liveHostProfile]);
+
+  const acceptCheck = useMemo(() => {
+    if (liveHostProfile) return hostAcceptsLiveCalls(liveHostProfile);
+    if (room?.isLive) {
+      return hostAcceptsLiveCalls({
+        id: room.hostId,
+        name: room.hostName,
+        ratePerMinute: liveRate,
+        isOnline: true,
+        isLive: true,
+        isOnCall: false,
+      });
+    }
+    return { ok: false, reason: "Host unavailable" as string | undefined };
+  }, [liveHostProfile, liveRate, room]);
+
+  const openCallSheet = () => {
+    if (!userId) {
+      router.push("/login");
+      return;
+    }
+    if (needsUnlock) {
+      pushToast?.("Unlock Premium live first to start a private call");
+      return;
+    }
+    if (status !== "live") {
+      pushToast?.("Host is not live right now");
+      return;
+    }
+    setCallSheetOpen(true);
+  };
+
+  const cancelLiveCallRequest = useCallback(async () => {
+    callCancelledRef.current = true;
+    stopRingingTone();
+    const callId = activeCallIdRef.current;
+    const hostId = room?.hostId || id;
+    setCallBusy(false);
+    activeCallIdRef.current = null;
+    reserveAmountRef.current = 0;
+    if (callId) {
+      try {
+        await endCall(callId);
+      } catch {
+        /* best effort */
+      }
+    }
+    setCallPhase("cancelled");
+    setCallStatusLine("You cancelled the request");
+    saveLivePrivateCallHistory({
+      id: callId || `cancel_${Date.now()}`,
+      hostId,
+      hostName: room?.hostName || "Host",
+      at: Date.now(),
+      durationSec: 0,
+      coinsSpent: 0,
+      status: "cancelled",
+      ratePerMinute: liveRate,
+    });
+  }, [id, liveRate, room?.hostId, room?.hostName]);
+
+  const dismissCallOverlay = useCallback(() => {
+    setCallPhase("idle");
+    setCallStatusLine("");
+    setCallBusy(false);
+  }, []);
+
+  const startLivePrivateCall = useCallback(async () => {
+    if (callBusy || !room) return;
+    if (!userId) {
+      router.push("/login");
+      return;
+    }
+    if (!acceptCheck.ok) {
+      setCallSheetOpen(false);
+      setCallPhase("offline");
+      setCallStatusLine(acceptCheck.reason || "Host unavailable");
+      return;
+    }
+    if (coins < liveRate) {
+      setCallSheetOpen(false);
+      pushToast?.(`Need ${liveRate} coins for the first minute`);
+      setTopUpOpen(true);
+      return;
+    }
+
+    setCallSheetOpen(false);
+    setCallBusy(true);
+    callCancelledRef.current = false;
+    setCallPhase("ringing");
+    setCallStatusLine("Sending call request…");
+    startRingingTone();
+
+    const hostId = room.hostId;
+    let callId: string | null = null;
+    let rateForCall = liveRate;
+
+    try {
+      // Soft hold: balance already checked. Coins charge on accept via billFirst.
+      const call = await createCall({
+        hostId,
+        userId,
+        userName,
+        userAvatar: avatarUrl || undefined,
+      });
+      if (callCancelledRef.current) {
+        stopRingingTone();
+        try {
+          await endCall(call.id);
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+
+      callId = call.id;
+      activeCallIdRef.current = call.id;
+      rateForCall = Math.max(
+        1,
+        Math.floor(Number(call.ratePerMinute) || liveRate),
+      );
+      if (coins < rateForCall) {
+        stopRingingTone();
+        try {
+          await endCall(call.id);
+        } catch {
+          /* ignore */
+        }
+        activeCallIdRef.current = null;
+        setCallBusy(false);
+        setCallPhase("missed");
+        setCallStatusLine(`Need ${rateForCall} coins for this host`);
+        setTopUpOpen(true);
+        return;
+      }
+
+      setCallStatusLine("Waiting for host…");
+      void notifyLivePrivateCallRequest({
+        hostId,
+        callId: call.id,
+        userId,
+        userName,
+        ratePerMinute: rateForCall,
+        roomId: room.id,
+      });
+
+      await waitForAccept(call.id, (st) => {
+        if (st === "ringing") setCallStatusLine("Ringing host…");
+      });
+
+      if (callCancelledRef.current) return;
+
+      stopRingingTone();
+      setCallPhase("connecting");
+      setCallStatusLine("Host accepted · starting private video…");
+      try {
+        await stopUserAgoraLiveViewer();
+      } catch {
+        /* continue into call */
+      }
+      activeCallIdRef.current = null;
+      saveLivePrivateCallHistory({
+        id: call.id,
+        hostId,
+        hostName: room.hostName || "Host",
+        at: Date.now(),
+        durationSec: 0,
+        coinsSpent: 0,
+        status: "accepted",
+        ratePerMinute: rateForCall,
+      });
+      router.push(
+        `/call/${encodeURIComponent(hostId)}?live=1&acceptedCall=${encodeURIComponent(call.id)}&fromLive=1&billFirst=1&reserveRate=${rateForCall}`,
+      );
+    } catch (err) {
+      stopRingingTone();
+      if (callId) {
+        try {
+          await endCall(callId);
+        } catch {
+          /* ignore */
+        }
+      }
+      activeCallIdRef.current = null;
+
+      if (callCancelledRef.current) {
+        setCallBusy(false);
+        return;
+      }
+
+      const msg = err instanceof Error ? err.message : "Call failed";
+      const offline = /offline|unavailable|network|fetch/i.test(msg);
+      const rejected = /declined|rejected/i.test(msg);
+      const missed = /missed|did not answer|didn't answer|timeout/i.test(msg);
+
+      setCallBusy(false);
+      setCallPhase(offline ? "offline" : rejected ? "rejected" : "missed");
+      setCallStatusLine(
+        offline
+          ? "Host unavailable"
+          : rejected
+            ? "Host declined the call"
+            : missed
+              ? "Host didn’t answer"
+              : msg,
+      );
+      saveLivePrivateCallHistory({
+        id: callId || `miss_${Date.now()}`,
+        hostId,
+        hostName: room.hostName || "Host",
+        at: Date.now(),
+        durationSec: 0,
+        coinsSpent: 0,
+        status: offline ? "offline" : rejected ? "rejected" : "missed",
+        ratePerMinute: rateForCall,
+      });
+    }
+  }, [
+    acceptCheck.ok,
+    acceptCheck.reason,
+    avatarUrl,
+    callBusy,
+    coins,
+    liveRate,
+    pushToast,
+    room,
+    router,
+    userId,
+    userName,
+  ]);
 
   const formatTimer = (s: number) => {
     const h = Math.floor(s / 3600);
@@ -612,16 +896,29 @@ export default function HostOnlyLiveRoomPage({
           >
             <GiftIcon className="h-5 w-5" />
           </button>
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/12 text-white backdrop-blur-md"
-            aria-label="More"
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
+          {status === "live" && !needsUnlock ? (
+            <button
+              type="button"
+              onClick={openCallSheet}
+              disabled={callBusy || callPhase === "ringing" || callPhase === "connecting"}
+              className="relative flex flex-col items-center disabled:opacity-60"
+              aria-label="Video Call"
+            >
+              <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 via-cyan-400 to-sky-500 text-ink shadow-[0_10px_28px_rgba(34,211,238,0.45)] ring-2 ring-white/40">
+                <span className="absolute inset-0 animate-ping rounded-full bg-cyan-300/30" />
+                <Video className="relative h-6 w-6" strokeWidth={2.4} />
+              </span>
+              <span className="mt-1 text-[9px] font-extrabold uppercase tracking-wide text-cyan-100">
+                Call
+              </span>
+            </button>
+          ) : null}
         </div>
 
-        <div className="mt-auto">
+        <div
+          className="mt-auto"
+          style={{ paddingBottom: kbInset > 0 ? kbInset : undefined }}
+        >
           {/* Modern chat — username + level badge pills */}
           <div className="pointer-events-none mb-3 max-h-[38vh] w-[min(72%,280px)] space-y-1.5 overflow-y-auto pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {comments.length === 0 && (
@@ -759,6 +1056,36 @@ export default function HostOnlyLiveRoomPage({
       )}
 
       <TopUpSheet open={topUpOpen} onClose={() => setTopUpOpen(false)} />
+
+      {room ? (
+        <LivePrivateCallSheet
+          open={callSheetOpen}
+          hostName={room.hostName || "Host"}
+          hostAvatar={room.hostAvatar}
+          hostId={room.hostId}
+          ratePerMinute={liveRate}
+          balance={coins}
+          acceptsCalls={acceptCheck.ok}
+          acceptReason={acceptCheck.reason}
+          busy={callBusy}
+          onClose={() => setCallSheetOpen(false)}
+          onConfirm={() => void startLivePrivateCall()}
+          onRecharge={() => {
+            setCallSheetOpen(false);
+            setTopUpOpen(true);
+          }}
+        />
+      ) : null}
+
+      <LiveCallRequestOverlay
+        phase={callPhase}
+        hostName={room?.hostName || "Host"}
+        hostAvatar={room?.hostAvatar}
+        hostId={room?.hostId || id}
+        statusLine={callStatusLine}
+        onCancel={() => void cancelLiveCallRequest()}
+        onDismiss={dismissCallOverlay}
+      />
     </main>
   );
 }

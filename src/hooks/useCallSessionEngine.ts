@@ -55,10 +55,20 @@ export function useCallSessionEngine(opts: {
   enabled: boolean;
   preferLiveBridge: boolean;
   audioOnly?: boolean;
+  /** Skip create/wait — join an already-accepted call from Live private request */
+  preAcceptedCallId?: string | null;
   onConnected?: (info: { transport: CallTransport; name: string }) => void;
   onFailed?: (message: string) => void;
 }): CallSessionEngine {
-  const { hostId, enabled, preferLiveBridge, audioOnly, onConnected, onFailed } = opts;
+  const {
+    hostId,
+    enabled,
+    preferLiveBridge,
+    audioOnly,
+    preAcceptedCallId,
+    onConnected,
+    onFailed,
+  } = opts;
   const onConnectedRef = useRef(onConnected);
   const onFailedRef = useRef(onFailed);
   onConnectedRef.current = onConnected;
@@ -171,6 +181,65 @@ export function useCallSessionEngine(opts: {
       try {
         setState("ROUTING");
         setStatusText("Finding the best connection…");
+
+        // Live private call already accepted — join Agora immediately
+        if (preAcceptedCallId) {
+          setTransport("agora_live");
+          setState("RINGING");
+          setStatusText("Host accepted · joining video…");
+          const accepted = await getCall(preAcceptedCallId);
+          if (cancelledRef.current) return;
+          if (accepted.status !== "accepted") {
+            throw new Error("Call is no longer available");
+          }
+          const hosts = await fetchLiveHosts().catch(() => [] as LiveHost[]);
+          let host =
+            hosts.find((h) => h.id === hostId) ||
+            (await fetchHostProfile(hostId));
+          if (!host) {
+            host = {
+              id: hostId,
+              name: accepted.hostName || "Host",
+              ratePerMinute: accepted.ratePerMinute || 80,
+              isOnline: true,
+              isLive: false,
+              isOnCall: true,
+            };
+          }
+          setLiveHost(host);
+          callIdRef.current = accepted.id;
+          sessionIdRef.current = accepted.id;
+          setSessionId(accepted.id);
+          setBridgeCall(accepted);
+
+          const token = await fetchCallToken(accepted.id);
+          if (cancelledRef.current) return;
+          for (let i = 0; i < 40; i++) {
+            if (localRef.current && remoteRef.current) break;
+            await new Promise((r) => requestAnimationFrame(() => r(null)));
+          }
+          if (!localRef.current || !remoteRef.current) {
+            throw new Error("Video surface missing — allow camera");
+          }
+          setState("CONNECTED");
+          await sleep(100);
+          await startUserAgoraCall({
+            appId: token.appId,
+            channel: token.channel,
+            token: token.token,
+            uid: token.uid,
+            localVideoEl: localRef.current,
+            remoteVideoEl: remoteRef.current,
+            audioOnly: Boolean(audioOnly),
+          });
+          if (cancelledRef.current) return;
+          setStatusText(`Connected with ${host.name}`);
+          onConnectedRef.current?.({
+            transport: "agora_live",
+            name: host.name,
+          });
+          return;
+        }
 
         // Prefer live Agora for real hosts — never silently swap to AI clips
         let decision = await routeOneToOneCall(hostId, {
@@ -414,7 +483,7 @@ export function useCallSessionEngine(opts: {
       sessionIdRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, hostId, preferLiveBridge, audioOnly]);
+  }, [enabled, hostId, preferLiveBridge, audioOnly, preAcceptedCallId]);
 
   const ratePerMinute =
     aiHost?.cost_per_minute ||

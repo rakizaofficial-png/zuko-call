@@ -148,23 +148,37 @@ function ZukoWebShell() {
     const sub: NativeEventSubscription = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
-        // Prefer in-page router.back via injected handler
+        // Ask the web app to handle back; wait for ZUKO_BACK_RESULT via onMessage.
+        // Do NOT also call goBack() synchronously — that double-navigates.
         webRef.current?.injectJavaScript(`
 (function(){
   try {
+    var handled = false;
     if (typeof window.__ZUKO_ANDROID_BACK__ === 'function') {
-      var handled = window.__ZUKO_ANDROID_BACK__();
-      if (handled) return true;
+      handled = !!window.__ZUKO_ANDROID_BACK__();
     }
-  } catch (e) {}
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'ZUKO_BACK_RESULT',
+        handled: handled
+      }));
+    }
+  } catch (e) {
+    try {
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'ZUKO_BACK_RESULT',
+          handled: false
+        }));
+      }
+    } catch (e2) {}
+  }
   true;
 })();
 true;`);
-        if (canGoBackRef.current) {
-          webRef.current?.goBack();
-          return true;
-        }
-        return false;
+        // Consume the event while the web layer responds; root exit comes via
+        // ZUKO_BACK_AT_ROOT / ZUKO_BACK_RESULT handled=false + no history.
+        return true;
       },
     );
     return () => sub.remove();
@@ -276,12 +290,13 @@ true;`);
           if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
             window.__ZUKO_IAP_CB__ = { resolve: resolve, reject: reject, sku: sku };
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_PURCHASE', sku: sku }));
+            // Fail fast so web checkout can open without a long fake wait
             setTimeout(function(){
               if (window.__ZUKO_IAP_CB__) {
                 window.__ZUKO_IAP_CB__ = null;
                 reject(new Error('Native Play Billing not linked yet — use web checkout'));
               }
-            }, 2500);
+            }, 400);
           } else { reject(new Error('Native bridge unavailable')); }
         } catch (err) { reject(err); }
       });
@@ -385,12 +400,35 @@ true;`;
                   const data = JSON.parse(event.nativeEvent.data || "{}") as {
                     type?: string;
                     sku?: string;
+                    handled?: boolean;
+                    count?: number;
                   };
                   if (data.type === "ZUKO_IAP_PURCHASE") {
-                    console.log("[zuko] IAP purchase request", data.sku);
+                    // Native Play Billing not linked — reject so web checkout runs
+                    webRef.current?.injectJavaScript(`
+(function(){
+  try {
+    if (window.__ZUKO_IAP_CB__ && window.__ZUKO_IAP_CB__.reject) {
+      var rej = window.__ZUKO_IAP_CB__.reject;
+      window.__ZUKO_IAP_CB__ = null;
+      rej(new Error('Native Play Billing not linked — use web checkout'));
+    }
+  } catch (e) {}
+  true;
+})();
+true;`);
                   }
                   if (data.type === "ZUKO_BACK_AT_ROOT") {
                     BackHandler.exitApp();
+                  }
+                  if (data.type === "ZUKO_BACK_RESULT") {
+                    if (!data.handled) {
+                      if (canGoBackRef.current) {
+                        webRef.current?.goBack();
+                      } else {
+                        BackHandler.exitApp();
+                      }
+                    }
                   }
                 } catch {
                   /* ignore */

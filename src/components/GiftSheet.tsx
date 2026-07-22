@@ -56,7 +56,8 @@ export function GiftSheet({
   /** Highlight gifts that meet this coin threshold (e.g. live unlock) */
   highlightMinCoins?: number;
 }) {
-  const { spend, syncWallet, pushToast, displayName, userId } = useApp();
+  const { spend, syncWallet, pushToast, displayName, userId, coins, openTopUp } =
+    useApp();
   const [sending, setSending] = useState<string | null>(null);
   const [cinematic, setCinematic] = useState<Gift | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,6 +70,11 @@ export function GiftSheet({
     const me = getDeviceUserId() || userId;
     if (hostId && me && me === hostId) {
       pushToast?.("Hosts cannot gift themselves!");
+      return;
+    }
+    if (coins < g.coins) {
+      pushToast?.("Not enough coins — recharge to send this gift");
+      openTopUp?.(g.coins);
       return;
     }
     setBusy(true);
@@ -109,6 +115,9 @@ export function GiftSheet({
         const data = await res.json();
         if (!res.ok) {
           markTxFailed(txId, data.error || "Gift failed");
+          if (res.status === 402) {
+            openTopUp?.(g.coins);
+          }
           throw new Error(data.error || "Gift failed");
         }
         markTxCompleted(txId, {
