@@ -13,10 +13,17 @@ function withSecureScreen(config) {
     if (src.includes("FLAG_SECURE")) return cfg;
 
     if (!src.includes("import android.view.WindowManager")) {
-      src = src.replace(
-        /package [\w.]+;/,
-        (m) => `${m}\n\nimport android.view.WindowManager;`,
-      );
+      if (src.includes("import android.os.Bundle")) {
+        src = src.replace(
+          "import android.os.Bundle",
+          "import android.os.Bundle\nimport android.view.WindowManager",
+        );
+      } else {
+        src = src.replace(
+          /package [\w.]+;?/,
+          (m) => `${m}\n\nimport android.view.WindowManager`,
+        );
+      }
     }
 
     // Kotlin MainActivity
