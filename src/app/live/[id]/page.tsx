@@ -47,6 +47,7 @@ import {
 } from "@/lib/liveChat";
 import {
   giftMeetsUnlock,
+  hasUnlockedLive,
   markLiveUnlocked,
   parseRoomLocked,
   pickUnlockGift,
@@ -134,6 +135,10 @@ export default function HostOnlyLiveRoomPage({
 
   const checkAndApplyAccess = useCallback(
     async (roomId: string) => {
+      if (hasUnlockedLive(roomId, userId)) {
+        setUnlocked(true);
+        return true;
+      }
       try {
         const access = await checkLiveRoomAccess(roomId, userId);
         if (access.entryFee) {
@@ -148,7 +153,10 @@ export default function HostOnlyLiveRoomPage({
           return true;
         }
       } catch {
-        /* Locked rooms remain locked until server access or join succeeds. */
+        if (hasUnlockedLive(roomId, userId)) {
+          setUnlocked(true);
+          return true;
+        }
       }
       setUnlocked(false);
       return false;
@@ -191,26 +199,18 @@ export default function HostOnlyLiveRoomPage({
     setRoom(roomNext);
     setStatus("live");
     if (locked) {
-      setUnlocked(false);
+      setUnlocked(hasUnlockedLive(roomNext.id, userId));
       void checkAndApplyAccess(roomNext.id);
     } else {
       setUnlocked(true);
     }
     return roomNext;
-  }, [id, forceLock, checkAndApplyAccess]);
+  }, [id, forceLock, userId, checkAndApplyAccess]);
 
-  // Resolve room + join Agora as viewer (video failure must NOT kill chat)
+  // Resolve room + bump viewer count. Video join is unlocked-gated below.
   useEffect(() => {
     let cancelled = false;
     let joinedRoomId: string | null = null;
-
-    const waitForVideoEl = async () => {
-      for (let i = 0; i < 40; i++) {
-        if (videoRef.current) return videoRef.current;
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      return null;
-    };
 
     (async () => {
       try {
@@ -224,39 +224,6 @@ export default function HostOnlyLiveRoomPage({
           userId,
           userName,
         });
-
-        try {
-          const el = await waitForVideoEl();
-          if (cancelled) return;
-          if (!el) throw new Error("Video mount missing");
-
-          const channel = next.channel || `live_${next.hostId}`;
-          const uid = 300000 + Math.floor(Math.random() * 90000);
-          const token = await fetchLiveAgoraToken(channel, uid);
-          const appId = token.appId || resolveAgoraAppId();
-          if (!appId) throw new Error("Agora App ID missing");
-
-          await startUserAgoraLiveViewer({
-            appId,
-            channel: token.channel || channel,
-            token: token.token,
-            uid: token.uid || uid,
-            remoteVideoEl: el,
-            onRemoteVideo: () => {
-              if (!cancelled) {
-                setStreamReady(true);
-                setVideoError(null);
-              }
-            },
-          });
-        } catch (ve) {
-          if (!cancelled) {
-            setVideoError(
-              ve instanceof Error ? ve.message : "Video unavailable",
-            );
-            // Keep status=live so chat/gifts still work
-          }
-        }
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Could not join live");
@@ -267,7 +234,6 @@ export default function HostOnlyLiveRoomPage({
 
     return () => {
       cancelled = true;
-      void stopUserAgoraLiveViewer();
       if (joinedRoomId) {
         void bumpLiveViewers({
           roomId: joinedRoomId,
@@ -278,6 +244,88 @@ export default function HostOnlyLiveRoomPage({
       }
     };
   }, [id, loadRoom, userId, userName]);
+
+  const agoraRoomId = room?.id;
+  const agoraHostId = room?.hostId;
+  const agoraChannel = agoraHostId
+    ? room?.channel || `live_${agoraHostId}`
+    : undefined;
+
+  // Join Agora only after the room is live and any Premium lock is cleared.
+  useEffect(() => {
+    if (
+      status !== "live" ||
+      !agoraRoomId ||
+      !agoraHostId ||
+      !agoraChannel ||
+      needsUnlock
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const waitForVideoEl = async () => {
+      for (let i = 0; i < 40; i++) {
+        if (videoRef.current) return videoRef.current;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return null;
+    };
+
+    (async () => {
+      setStreamReady(false);
+      try {
+        const el = await waitForVideoEl();
+        if (cancelled) return;
+        if (!el) throw new Error("Video mount missing");
+
+        const uid = 300000 + Math.floor(Math.random() * 90000);
+        const token = await fetchLiveAgoraToken(agoraChannel, uid, {
+          userId,
+          hostId: agoraHostId,
+        });
+        const appId = token.appId || resolveAgoraAppId();
+        if (!appId) throw new Error("Agora App ID missing");
+
+        await startUserAgoraLiveViewer({
+          appId,
+          channel: token.channel || agoraChannel,
+          token: token.token,
+          uid: token.uid || uid,
+          remoteVideoEl: el,
+          onRemoteVideo: () => {
+            if (!cancelled) {
+              setStreamReady(true);
+              setVideoError(null);
+            }
+          },
+        });
+      } catch (ve) {
+        if (cancelled) return;
+        const statusCode = (ve as Error & { status?: number })?.status;
+        if (statusCode === 402) {
+          setUnlocked(false);
+          pushToast?.("Payment required to enter this Premium live");
+        }
+        setVideoError(ve instanceof Error ? ve.message : "Video unavailable");
+        // Keep status=live so chat/gifts still work.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      void stopUserAgoraLiveViewer();
+    };
+  }, [
+    status,
+    needsUnlock,
+    agoraRoomId,
+    agoraHostId,
+    agoraChannel,
+    userId,
+    pushToast,
+  ]);
 
   // Chat + diamonds + end detection — keep listening while room is known
   useEffect(() => {
@@ -329,7 +377,7 @@ export default function HostOnlyLiveRoomPage({
             : r,
         );
         if (lock.locked) {
-          setUnlocked(false);
+          setUnlocked(hasUnlockedLive(room.id, userId));
           void checkAndApplyAccess(room.id);
         } else {
           setUnlocked(true);
@@ -528,15 +576,48 @@ export default function HostOnlyLiveRoomPage({
       router.push("/login");
       return;
     }
-    if (!acceptCheck.ok) {
+
+    let currentCoins = coins;
+    try {
+      const wallet = await syncWallet?.();
+      if (typeof wallet?.coinBalance === "number") {
+        currentCoins = wallet.coinBalance;
+      }
+    } catch {
+      /* Use the on-screen balance if wallet refresh fails. */
+    }
+
+    const syntheticLiveHost: LiveHost = {
+      id: room.hostId,
+      name: room.hostName || "Host",
+      avatarUrl: room.hostAvatar,
+      ratePerMinute: liveRate,
+      isOnline: true,
+      isLive: Boolean(room.isLive),
+      isOnCall: false,
+    };
+    const fresh = await fetchHostProfile(room.hostId);
+    if (fresh) setLiveHostProfile(fresh);
+    const currentAcceptCheck = hostAcceptsLiveCalls(fresh || syntheticLiveHost);
+    if (fresh?.isOnCall) {
       setCallSheetOpen(false);
       setCallPhase("offline");
-      setCallStatusLine(acceptCheck.reason || "Host unavailable");
+      setCallStatusLine("Host is already on a private call");
       return;
     }
-    if (coins < liveRate) {
+    if (!room.isLive && !currentAcceptCheck.ok) {
       setCallSheetOpen(false);
-      pushToast?.(`Need ${liveRate} coins for the first minute`);
+      setCallPhase("offline");
+      setCallStatusLine(currentAcceptCheck.reason || "Host unavailable");
+      return;
+    }
+    const rateForGate = Math.max(
+      1,
+      Math.floor(Number(fresh?.ratePerMinute) || liveRate),
+    );
+    if (currentCoins < rateForGate) {
+      setCallSheetOpen(false);
+      pushToast?.(`Need ${rateForGate} coins for the first minute`);
       setTopUpOpen(true);
       return;
     }
@@ -550,7 +631,7 @@ export default function HostOnlyLiveRoomPage({
 
     const hostId = room.hostId;
     let callId: string | null = null;
-    let rateForCall = liveRate;
+    let rateForCall = rateForGate;
 
     try {
       // Soft hold: balance already checked. Coins charge on accept via billFirst.
@@ -574,9 +655,9 @@ export default function HostOnlyLiveRoomPage({
       activeCallIdRef.current = call.id;
       rateForCall = Math.max(
         1,
-        Math.floor(Number(call.ratePerMinute) || liveRate),
+        Math.floor(Number(call.ratePerMinute) || rateForGate),
       );
-      if (coins < rateForCall) {
+      if (currentCoins < rateForCall) {
         stopRingingTone();
         try {
           await endCall(call.id);
@@ -646,21 +727,42 @@ export default function HostOnlyLiveRoomPage({
       }
 
       const msg = err instanceof Error ? err.message : "Call failed";
-      const offline = /offline|unavailable|network|fetch/i.test(msg);
+      const statusCode = (err as Error & { status?: number })?.status;
+      const paymentRequired =
+        statusCode === 402 ||
+        /\b402\b|coin|balance|insufficient|recharge|top.?up|payment required/i.test(
+          msg,
+        );
+      const busy =
+        statusCode === 409 ||
+        /\b409\b|busy|already.*call|on.*call|conflict/i.test(msg);
+      const offline =
+        statusCode === 404 ||
+        /\b404\b|offline|not found|unavailable|network|fetch/i.test(msg);
       const rejected = /declined|rejected/i.test(msg);
       const missed = /missed|did not answer|didn't answer|timeout/i.test(msg);
 
       setCallBusy(false);
-      setCallPhase(offline ? "offline" : rejected ? "rejected" : "missed");
-      setCallStatusLine(
-        offline
-          ? "Host unavailable"
-          : rejected
-            ? "Host declined the call"
-            : missed
-              ? "Host didn’t answer"
-              : msg,
-      );
+      if (paymentRequired) {
+        setCallPhase("missed");
+        setCallStatusLine(`Need ${rateForCall} coins to start this call`);
+        pushToast?.(`Need ${rateForCall} coins to start this call`);
+        setTopUpOpen(true);
+      } else if (busy) {
+        setCallPhase("offline");
+        setCallStatusLine("Host is already on a private call");
+      } else {
+        setCallPhase(offline ? "offline" : rejected ? "rejected" : "missed");
+        setCallStatusLine(
+          offline
+            ? "Host is offline or unavailable"
+            : rejected
+              ? "Host declined the call"
+              : missed
+                ? "Host didn’t answer"
+                : msg,
+        );
+      }
       saveLivePrivateCallHistory({
         id: callId || `miss_${Date.now()}`,
         hostId,
@@ -668,13 +770,11 @@ export default function HostOnlyLiveRoomPage({
         at: Date.now(),
         durationSec: 0,
         coinsSpent: 0,
-        status: offline ? "offline" : rejected ? "rejected" : "missed",
+        status: offline || busy ? "offline" : rejected ? "rejected" : "missed",
         ratePerMinute: rateForCall,
       });
     }
   }, [
-    acceptCheck.ok,
-    acceptCheck.reason,
     avatarUrl,
     callBusy,
     coins,
@@ -682,6 +782,7 @@ export default function HostOnlyLiveRoomPage({
     pushToast,
     room,
     router,
+    syncWallet,
     userId,
     userName,
   ]);
@@ -1131,8 +1232,8 @@ export default function HostOnlyLiveRoomPage({
           hostId={room.hostId}
           ratePerMinute={liveRate}
           balance={coins}
-          acceptsCalls={acceptCheck.ok}
-          acceptReason={acceptCheck.reason}
+          acceptsCalls={room.isLive ? true : acceptCheck.ok}
+          acceptReason={room.isLive ? undefined : acceptCheck.reason}
           busy={callBusy}
           onClose={() => setCallSheetOpen(false)}
           onConfirm={() => void startLivePrivateCall()}
