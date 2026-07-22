@@ -36,14 +36,11 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Sign in"
-      subtitle="Password + OTP secure login. Session binds to your device wallet."
+      subtitle="Secure login for your Zuko wallet, calls, and VIP."
       footer={
-        <>
-          New here?{" "}
-          <Link href="/register" className="font-bold text-coral">
-            Create account
-          </Link>
-        </>
+        <Link href="/forgot-password" className="font-bold text-coral">
+          Forgot password?
+        </Link>
       }
     >
       <AuthField
@@ -63,12 +60,7 @@ export default function LoginPage() {
         placeholder="••••••••"
       />
       <div className="flex justify-end">
-        <Link
-          href="/forgot-password"
-          className="text-xs font-semibold text-cyan"
-        >
-          Forgot password?
-        </Link>
+        <span className="text-[11px] text-muted">OTP required after password</span>
       </div>
       <AuthPrimaryButton loading={loading} onClick={() => void submit()}>
         Continue to OTP

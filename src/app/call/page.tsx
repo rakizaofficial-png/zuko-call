@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Shuffle } from "lucide-react";
 import {
@@ -13,6 +13,7 @@ import {
   catalogDiscoverHosts,
   mergeDiscoverHosts,
   rotateHosts,
+  uniqueHosts,
   type DiscoverHost,
 } from "@/lib/discoverHosts";
 
@@ -20,20 +21,31 @@ import {
 export default function CallLobbyPage() {
   const [hosts, setHosts] = useState<DiscoverHost[]>([]);
   const [loading, setLoading] = useState(true);
+  const sigRef = useRef("");
 
   const refresh = useCallback(async () => {
-    setLoading(true);
     try {
       const all = await fetchLiveHosts();
-      setHosts(mergeDiscoverHosts(all).filter((h) => h.online && !h.live));
+      const next = uniqueHosts(
+        mergeDiscoverHosts(all).filter((h) => h.online && !h.live),
+      );
+      const sig = next.map((h) => `${h.id}:${h.online ? 1 : 0}`).join("|");
+      if (sig !== sigRef.current) {
+        sigRef.current = sig;
+        setHosts(next);
+      }
     } catch {
-      setHosts(mergeDiscoverHosts([]).filter((h) => h.online && !h.live));
+      if (sigRef.current !== "") {
+        sigRef.current = "";
+        setHosts([]);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     void refresh();
     const t = setInterval(() => void refresh(), 8000);
     return () => clearInterval(t);
@@ -57,7 +69,7 @@ export default function CallLobbyPage() {
 
   const displayHosts = useMemo(() => {
     const src = hosts.length ? hosts : catalogDiscoverHosts("call");
-    return rotateHosts(src, rotationSeed);
+    return uniqueHosts(rotateHosts(src, rotationSeed));
   }, [hosts, rotationSeed]);
 
   return (

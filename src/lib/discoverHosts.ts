@@ -121,9 +121,11 @@ function enrichLive(h: LiveHost, i: number): DiscoverHost {
 
 export function mergeDiscoverHosts(live: LiveHost[]): DiscoverHost[] {
   // Only real online/live API hosts — never pad with offline catalog stubs
-  return live
-    .filter((h) => h.isOnline || h.isLive)
-    .map(enrichLive);
+  return uniqueHosts(
+    live
+      .filter((h) => h.isOnline || h.isLive)
+      .map(enrichLive),
+  );
 }
 
 /**
@@ -204,19 +206,66 @@ export function filterHosts(
   });
 }
 
+/**
+ * Partition hosts into exclusive rails — each host appears in at most one section.
+ * Order of assignment = priority (recommended first, then online, …).
+ */
 export function sectionHosts(hosts: DiscoverHost[]) {
-  const online = hosts.filter((h) => h.online || h.live);
-  const trending = [...hosts]
-    .sort((a, b) => b.trendingScore - a.trendingScore)
-    .slice(0, 12);
-  const newest = hosts.filter((h) => h.isNew).slice(0, 10);
-  const topRated = [...hosts].sort((a, b) => b.rating - a.rating).slice(0, 10);
-  const recommended = [...hosts]
-    .sort((a, b) => Number(b.online) - Number(a.online) || b.rating - a.rating)
-    .slice(0, 10);
-  const nearby = hosts.filter((h) => h.nearby).slice(0, 10);
-  const recent = hosts.filter((h) => h.recentlyActive).slice(0, 10);
-  return { online, trending, newest, topRated, recommended, nearby, recent };
+  const seen = new Set<string>();
+  const take = (candidates: DiscoverHost[], limit: number) => {
+    const out: DiscoverHost[] = [];
+    for (const h of candidates) {
+      if (seen.has(h.id)) continue;
+      seen.add(h.id);
+      out.push(h);
+      if (out.length >= limit) break;
+    }
+    return out;
+  };
+
+  const byOnlineRating = [...hosts].sort(
+    (a, b) => Number(b.online) - Number(a.online) || b.rating - a.rating,
+  );
+  const byTrending = [...hosts].sort(
+    (a, b) => b.trendingScore - a.trendingScore,
+  );
+  const byRating = [...hosts].sort((a, b) => b.rating - a.rating);
+  const newestPool = hosts.filter((h) => h.isNew);
+  const nearbyPool = hosts.filter((h) => h.nearby);
+  const recentPool = hosts.filter((h) => h.recentlyActive);
+  const onlinePool = hosts.filter((h) => (h.online || h.live) && !h.live);
+
+  const recommended = take(byOnlineRating, 8);
+  const online = take(onlinePool, 10);
+  const newest = take(newestPool, 8);
+  const topRated = take(byRating, 8);
+  const trending = take(byTrending, 8);
+  const nearby = take(nearbyPool, 8);
+  const recent = take(recentPool, 8);
+
+  return {
+    online,
+    trending,
+    newest,
+    topRated,
+    recommended,
+    nearby,
+    recent,
+    /** IDs already shown in a rail — use to dedupe the main grid */
+    claimedIds: seen,
+  };
+}
+
+/** Unique hosts by id (first wins). */
+export function uniqueHosts(hosts: DiscoverHost[]): DiscoverHost[] {
+  const seen = new Set<string>();
+  const out: DiscoverHost[] = [];
+  for (const h of hosts) {
+    if (seen.has(h.id)) continue;
+    seen.add(h.id);
+    out.push(h);
+  }
+  return out;
 }
 
 export function findDiscoverHost(

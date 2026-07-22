@@ -45,6 +45,7 @@ export default function ChatThreadPage({
     online: true,
   });
   const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const userId = useMemo(() => getDeviceUserId(), []);
   const EMOJIS = ["😀", "😍", "🔥", "💕", "😘", "✨", "🎉", "👋", "🥰", "😎"];
@@ -121,8 +122,27 @@ export default function ChatThreadPage({
   }, [id, userId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages.length, hostTyping]);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const sync = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty("--kb-inset", `${inset}px`);
+    };
+    sync();
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    return () => {
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
+      document.documentElement.style.removeProperty("--kb-inset");
+    };
+  }, []);
 
   const send = async (payload?: string, imageUrl?: string) => {
     const outgoing = (payload ?? text).trim();
@@ -178,8 +198,8 @@ export default function ChatThreadPage({
   };
 
   return (
-    <main className="flex min-h-dvh flex-col bg-[#06040b]">
-      <header className="safe-header sticky top-0 z-20 flex items-center gap-3 border-b border-white/10 bg-[#06040b]/90 px-3 py-3 backdrop-blur-xl">
+    <main className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-[#06040b]">
+      <header className="safe-header z-20 flex shrink-0 items-center gap-3 border-b border-white/10 bg-[#06040b]/95 px-3 py-3 backdrop-blur-xl">
         <Link href="/messages" className="rounded-full bg-ink-3 p-2">
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -215,7 +235,10 @@ export default function ChatThreadPage({
         </Link>
       </header>
 
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div
+        ref={listRef}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
+      >
         {messages.map((m) => (
           <motion.div
             key={m.id}
@@ -249,7 +272,10 @@ export default function ChatThreadPage({
         <div ref={bottomRef} />
       </div>
 
-      <div className="safe-footer border-t border-white/10 bg-ink-2/80 px-3 py-3">
+      <div
+        className="safe-footer shrink-0 border-t border-white/10 bg-ink-2/95 px-3 py-3"
+        style={{ paddingBottom: "max(0.75rem, var(--kb-inset, 0px))" }}
+      >
         {emojiOpen ? (
           <div className="mb-2 flex flex-wrap gap-1.5 rounded-2xl border border-white/10 bg-[#06040b] p-2">
             {EMOJIS.map((e) => (

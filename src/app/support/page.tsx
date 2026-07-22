@@ -24,7 +24,8 @@ export default function SupportPage() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = bottomRef.current?.parentElement;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
   const send = async () => {
@@ -41,8 +42,8 @@ export default function SupportPage() {
   };
 
   return (
-    <main className="flex min-h-dvh flex-col bg-[#06040b]">
-      <header className="safe-header sticky top-0 z-20 flex items-center gap-3 border-b border-white/10 bg-[#06040b]/90 px-3 py-3 backdrop-blur-xl">
+    <main className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-[#06040b]">
+      <header className="safe-header z-20 flex shrink-0 items-center gap-3 border-b border-white/10 bg-[#06040b]/95 px-3 py-3 backdrop-blur-xl">
         <Link href="/profile" className="rounded-full bg-ink-3 p-2">
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -59,7 +60,7 @@ export default function SupportPage() {
         </div>
       </header>
 
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4">
         <div className="rounded-2xl border border-line bg-ink-2/50 px-4 py-3 text-center">
           <p className="font-display text-sm font-bold text-sand">
             How can we help?
@@ -96,7 +97,7 @@ export default function SupportPage() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-white/10 bg-ink-2/80 px-3 py-3 safe-footer">
+      <div className="safe-footer shrink-0 border-t border-white/10 bg-ink-2/95 px-3 py-3">
         <div className="mb-2 flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {SUPPORT_CATEGORIES.map((c) => (
             <button
