@@ -18,7 +18,24 @@ import {
 } from "@/lib/coinLedger";
 
 function isCinematic(g: Gift) {
-  return g.tier === "cinematic" || g.coins >= 250;
+  return (
+    g.tier === "cinematic" ||
+    g.tier === "luxury" ||
+    g.tier === "vip" ||
+    g.tier === "legendary" ||
+    g.coins >= 250
+  );
+}
+
+function giftTierLabel(g: Gift) {
+  if (g.coins >= 2000 || g.tier === "legendary") return "Legendary";
+  if (g.coins >= 700 || g.tier === "vip") return "VIP";
+  if (g.coins >= 250 || g.tier === "luxury" || g.tier === "cinematic")
+    return "Luxury";
+  if (g.coins >= 100 || g.tier === "large") return "Large";
+  if (g.coins >= 40 || g.tier === "medium" || g.tier === "premium")
+    return "Medium";
+  return "Small";
 }
 
 export function GiftSheet({
@@ -176,7 +193,7 @@ export function GiftSheet({
             </div>
 
             <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">
-              Classic
+              Small · Medium · Large
             </p>
             <div className="grid grid-cols-3 gap-2.5">
               {basic.map((g) => {
@@ -198,7 +215,11 @@ export function GiftSheet({
                       <span className="absolute right-1 top-1 rounded-full bg-amber-400 px-1 text-[8px] font-bold text-black">
                         UNLOCK
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className="absolute left-1 top-1 rounded-full bg-white/10 px-1 text-[8px] font-bold text-white/60">
+                        {giftTierLabel(g)}
+                      </span>
+                    )}
                     <span className="text-2xl">{g.emoji}</span>
                     <span className="text-xs font-semibold">{g.name}</span>
                     <span className="text-[10px] text-gold">{g.coins} coins</span>
@@ -208,7 +229,7 @@ export function GiftSheet({
             </div>
 
             <p className="mb-2 mt-4 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-coral">
-              <Sparkles className="h-3 w-3" /> Adult · cinematic (250+)
+              <Sparkles className="h-3 w-3" /> Luxury · VIP · Legendary
             </p>
             <div className="grid grid-cols-3 gap-2.5">
               {adult.map((g) => {

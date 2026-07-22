@@ -38,8 +38,17 @@ export type Gift = {
   name: string;
   emoji: string;
   coins: number;
-  /** basic < 250 · cinematic adult gifts start at 250+ */
-  tier?: "basic" | "premium" | "cinematic";
+  /** small · medium · large · luxury · vip · legendary (+ legacy aliases) */
+  tier?:
+    | "basic"
+    | "premium"
+    | "cinematic"
+    | "small"
+    | "medium"
+    | "large"
+    | "luxury"
+    | "vip"
+    | "legendary";
   adult?: boolean;
 };
 
@@ -203,19 +212,31 @@ export const threads: ChatThread[] = [
 ];
 
 export const gifts: Gift[] = [
-  { id: "rose", name: "Rose", emoji: "🌹", coins: 1, tier: "basic" },
-  { id: "heart", name: "Heart", emoji: "💖", coins: 5, tier: "basic" },
-  { id: "kiss", name: "Kiss", emoji: "💋", coins: 10, tier: "basic" },
-  { id: "star", name: "Star", emoji: "⭐", coins: 20, tier: "basic" },
-  { id: "diamond", name: "Diamond", emoji: "💎", coins: 99, tier: "premium" },
-  { id: "crown", name: "Crown", emoji: "👑", coins: 199, tier: "premium" },
-  // Cinematic adult gifts (250+ coins) — big full-screen animation
+  // Small
+  { id: "rose", name: "Rose", emoji: "🌹", coins: 1, tier: "small" },
+  { id: "heart", name: "Heart", emoji: "💖", coins: 5, tier: "small" },
+  { id: "kiss", name: "Kiss", emoji: "💋", coins: 10, tier: "small" },
+  { id: "candy", name: "Candy", emoji: "🍬", coins: 15, tier: "small" },
+  { id: "star", name: "Star", emoji: "⭐", coins: 20, tier: "small" },
+  { id: "coffee", name: "Coffee", emoji: "☕", coins: 30, tier: "small" },
+  // Medium
+  { id: "balloon", name: "Balloon", emoji: "🎈", coins: 49, tier: "medium" },
+  { id: "icecream", name: "Ice Cream", emoji: "🍦", coins: 69, tier: "medium" },
+  { id: "teddy", name: "Teddy", emoji: "🧸", coins: 89, tier: "medium" },
+  { id: "diamond", name: "Diamond", emoji: "💎", coins: 99, tier: "medium" },
+  { id: "perfume", name: "Perfume", emoji: "🧴", coins: 129, tier: "medium" },
+  { id: "crown", name: "Crown", emoji: "👑", coins: 199, tier: "large" },
+  // Large
+  { id: "ring", name: "Ring", emoji: "💍", coins: 249, tier: "large" },
+  { id: "car", name: "Sports Car", emoji: "🏎️", coins: 399, tier: "large" },
+  { id: "yacht", name: "Yacht", emoji: "🛥️", coins: 599, tier: "large" },
+  // Luxury / cinematic
   {
     id: "silk_touch",
     name: "Silk Touch",
     emoji: "👙",
     coins: 299,
-    tier: "cinematic",
+    tier: "luxury",
     adult: true,
   },
   {
@@ -223,7 +244,7 @@ export const gifts: Gift[] = [
     name: "Velvet Night",
     emoji: "🔥",
     coins: 499,
-    tier: "cinematic",
+    tier: "luxury",
     adult: true,
   },
   {
@@ -231,7 +252,7 @@ export const gifts: Gift[] = [
     name: "Private Dance",
     emoji: "💃",
     coins: 799,
-    tier: "cinematic",
+    tier: "vip",
     adult: true,
   },
   {
@@ -239,24 +260,45 @@ export const gifts: Gift[] = [
     name: "Cinematic Kiss",
     emoji: "😘",
     coins: 999,
-    tier: "cinematic",
+    tier: "vip",
     adult: true,
+  },
+  {
+    id: "castle",
+    name: "Magic Castle",
+    emoji: "🏰",
+    coins: 1499,
+    tier: "vip",
   },
   {
     id: "royal_fantasy",
     name: "Royal Fantasy",
     emoji: "👸",
     coins: 1999,
-    tier: "cinematic",
+    tier: "legendary",
     adult: true,
+  },
+  {
+    id: "galaxy",
+    name: "Galaxy Love",
+    emoji: "🌌",
+    coins: 2999,
+    tier: "legendary",
   },
   {
     id: "ultimate_desire",
     name: "Ultimate Desire",
     emoji: "✨",
     coins: 4999,
-    tier: "cinematic",
+    tier: "legendary",
     adult: true,
+  },
+  {
+    id: "phoenix",
+    name: "Phoenix Rise",
+    emoji: "🔥",
+    coins: 9999,
+    tier: "legendary",
   },
 ];
 

@@ -107,8 +107,20 @@ export async function startUserAgoraCall(options: {
   const mic = await AgoraRTC.createMicrophoneAudioTrack();
   let cam: import('agora-rtc-sdk-ng').ICameraVideoTrack | null = null;
   if (!audioOnly) {
-    cam = await AgoraRTC.createCameraVideoTrack({ encoderConfig: '480p_1' });
-    cam.play(options.localVideoEl, { fit: 'cover' });
+    try {
+      cam = await AgoraRTC.createCameraVideoTrack({
+        encoderConfig: "480p_1",
+        facingMode: "user",
+      });
+    } catch {
+      // Retry once — common Android WebView race on first permission grant
+      await new Promise((r) => setTimeout(r, 350));
+      cam = await AgoraRTC.createCameraVideoTrack({
+        encoderConfig: "480p_1",
+        facingMode: "user",
+      });
+    }
+    cam.play(options.localVideoEl, { fit: "cover" });
     await client.publish([mic, cam]);
   } else {
     await client.publish([mic]);
@@ -139,13 +151,77 @@ export async function startUserAgoraCall(options: {
 async function attemptAgoraReconnect() {
   if (!session?.joinOpts || reconnecting) return;
   reconnecting = true;
-  const opts = session.joinOpts;
+  const opts = { ...session.joinOpts };
   try {
+    // Refresh token before rejoin — stale tokens cause black screen / freeze
+    const callIdMatch = opts.channel?.match(/call[_-]?(.+)/i);
+    try {
+      const { requireApiBase } = await import("@/config/apiConfig");
+      const { getDeviceUserId } = await import("@/lib/walletApi");
+      const qs = new URLSearchParams({
+        role: "user",
+        channel: opts.channel,
+        uid: String(opts.uid),
+      });
+      // Prefer call-id token endpoint when channel embeds call id
+      let tokenUrl = `${requireApiBase()}/agora/token?${qs}`;
+      if (callIdMatch?.[1]) {
+        tokenUrl = `${requireApiBase()}/calls/${encodeURIComponent(callIdMatch[1])}/token?role=user`;
+      }
+      const res = await fetch(tokenUrl, {
+        headers: { "X-User-Id": getDeviceUserId() },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          token?: string;
+          agoraToken?: string;
+          uid?: number;
+        };
+        const fresh = data.token || data.agoraToken;
+        if (fresh) opts.token = fresh;
+        if (typeof data.uid === "number") opts.uid = data.uid;
+      }
+    } catch {
+      /* keep previous token */
+    }
     await startUserAgoraCall(opts);
   } catch (err) {
-    console.warn('[agora] reconnect failed', err);
+    console.warn("[agora] reconnect failed", err);
   } finally {
     reconnecting = false;
+  }
+}
+
+/** Recover frozen/black local camera without leaving the channel. */
+export async function recoverUserCamera() {
+  if (!session?.client || session.audioOnly) return;
+  try {
+    const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
+    if (session.cam) {
+      try {
+        await session.client.unpublish([session.cam]);
+      } catch {
+        /* ignore */
+      }
+      try {
+        session.cam.stop();
+        session.cam.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    const cam = await AgoraRTC.createCameraVideoTrack({
+      encoderConfig: "480p_1",
+      facingMode: "user",
+    });
+    if (session.joinOpts?.localVideoEl) {
+      cam.play(session.joinOpts.localVideoEl, { fit: "cover" });
+    }
+    await session.client.publish([cam]);
+    session.cam = cam;
+  } catch (err) {
+    console.warn("[agora] camera recover failed", err);
   }
 }
 

@@ -36,6 +36,7 @@ export function BottomNav() {
     pathname.startsWith("/host/") ||
     pathname === "/match" ||
     pathname.startsWith("/messages/") ||
+    pathname === "/messages/system" ||
     pathname.startsWith("/party/") ||
     pathname.startsWith("/feed") ||
     pathname === "/premium" ||

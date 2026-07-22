@@ -1,40 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Coins, ShieldCheck, Sparkles, X, Zap } from "lucide-react";
+import { Coins, ShieldCheck, Sparkles, X, Zap } from "lucide-react";
 import { IAP_PRODUCTS, type IapProduct } from "@/lib/payments/iapCatalog";
 import { purchaseCoins } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 
 /**
- * Play-policy checkout — digital coins must use Google Play Billing.
- * UI mirrors a modern payment-method picker, but only Play-compliant methods.
+ * TikTok-style recharge sheet — large coin packs, animated cards, Play Billing.
  */
-type PayMethod = {
-  id: "google_play" | "google_play_promo";
-  label: string;
-  sub: string;
-  badge?: string;
-  recommended?: boolean;
-};
-
-const PAY_METHODS: PayMethod[] = [
-  {
-    id: "google_play",
-    label: "Google Play",
-    sub: "Official Play Billing · secure",
-    recommended: true,
-    badge: "Recommended",
-  },
-  {
-    id: "google_play_promo",
-    label: "Google Play · Promo",
-    sub: "Same Play Billing · bonus packs",
-    badge: "Best value",
-  },
-];
-
 export function TopUpSheet({
   open,
   onClose,
@@ -48,18 +23,15 @@ export function TopUpSheet({
   minuteRate?: number;
   warningMessage?: string;
 }) {
-  const { userId, pushToast, syncWallet } = useApp();
+  const { userId, coins, pushToast, syncWallet } = useApp();
   const [busy, setBusy] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<string>(
     IAP_PRODUCTS.find((p) => p.popular)?.productId || IAP_PRODUCTS[0]!.productId,
   );
-  const [method, setMethod] = useState<PayMethod["id"]>("google_play");
 
   const product: IapProduct =
     IAP_PRODUCTS.find((p) => p.productId === selectedProduct) || IAP_PRODUCTS[0]!;
   const totalCoins = product.coins + product.bonusCoins;
-
-  const methods = useMemo(() => PAY_METHODS, []);
 
   const payNow = async () => {
     if (!userId) {
@@ -93,7 +65,7 @@ export function TopUpSheet({
           <motion.button
             type="button"
             aria-label="Close top-up"
-            className="fixed inset-0 z-[70] bg-black/55"
+            className="fixed inset-0 z-[70] bg-black/60"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -104,171 +76,117 @@ export function TopUpSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
-            className="fixed bottom-0 left-1/2 z-[75] max-h-[92dvh] w-full max-w-[430px] -translate-x-1/2 overflow-y-auto rounded-t-[1.75rem] border border-cyan/35 bg-[#0a0812]/98 px-4 pt-4 shadow-[0_-24px_80px_rgba(0,240,255,0.18)] backdrop-blur-xl safe-footer"
+            className="fixed bottom-0 left-1/2 z-[75] max-h-[92dvh] w-full max-w-[430px] -translate-x-1/2 overflow-y-auto rounded-t-[1.75rem] border border-gold/30 bg-gradient-to-b from-[#1a1208] via-[#0a0812] to-[#06040b] px-4 pt-4 shadow-[0_-24px_80px_rgba(255,184,0,0.18)] backdrop-blur-xl safe-footer"
           >
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-cyan/40" />
-            <div className="mb-1 flex items-start justify-between gap-3">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gold/50" />
+
+            <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-cyan">
-                  <Zap className="h-3.5 w-3.5" /> Checkout
+                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-gold">
+                  <Zap className="h-3.5 w-3.5" /> Recharge
                 </p>
-                <h3 className="mt-1 font-display text-xl font-extrabold text-sand">
-                  {warningMessage
-                    ? /insufficient/i.test(warningMessage)
-                      ? "Insufficient Coins"
-                      : "Balance running low"
-                    : "Recharge coins"}
+                <h3 className="mt-1 font-display text-2xl font-extrabold text-sand">
+                  {warningMessage && /insufficient/i.test(warningMessage)
+                    ? "Insufficient Coins"
+                    : "Get coins"}
                 </h3>
                 {warningMessage ? (
                   <p className="mt-1 text-xs text-rose-300/90">{warningMessage}</p>
-                ) : null}
-                <p className="mt-1 text-xs text-cyan/80">
-                  You will get{" "}
-                  <span className="font-bold text-gold">
-                    {totalCoins.toLocaleString()}
-                  </span>{" "}
-                  coins
-                  {minuteRate ? ` · calls from ${minuteRate}/min` : ""}
-                  {graceLeft != null ? ` · ${graceLeft}s grace` : ""}
-                </p>
+                ) : (
+                  <p className="mt-1 text-xs text-white/55">
+                    Balance{" "}
+                    <span className="font-bold text-gold">
+                      {coins.toLocaleString()}
+                    </span>
+                    {minuteRate ? ` · from ${minuteRate}/min` : ""}
+                    {graceLeft != null ? ` · ${graceLeft}s grace` : ""}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-cyan/25 bg-ink-3 p-2 text-cyan"
+                className="rounded-full border border-white/15 bg-ink-3 p-2 text-sand"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-muted">
-              Coin pack
-            </p>
-            <div className="mt-2 space-y-2">
-              {IAP_PRODUCTS.map((tier) => {
+            <div className="grid grid-cols-2 gap-2.5">
+              {IAP_PRODUCTS.map((tier, i) => {
                 const total = tier.coins + tier.bonusCoins;
                 const active = tier.productId === selectedProduct;
                 return (
-                  <button
+                  <motion.button
                     key={tier.productId}
                     type="button"
+                    initial={{ opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.04 }}
                     onClick={() => setSelectedProduct(tier.productId)}
-                    className={`flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left ${
+                    className={`relative overflow-hidden rounded-2xl border px-3 py-3.5 text-left transition active:scale-[0.98] ${
                       active
-                        ? "border-emerald-400/60 bg-emerald-500/10"
-                        : "border-white/10 bg-ink-2/80"
+                        ? "border-gold bg-gradient-to-br from-gold/25 via-coral/10 to-ink-2 shadow-[0_0_24px_rgba(255,184,0,0.25)]"
+                        : "border-white/10 bg-white/[0.04]"
                     }`}
                   >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan/15 text-cyan">
-                      {tier.popular ? (
-                        <Sparkles className="h-5 w-5 text-gold" />
+                    {tier.popular ? (
+                      <span className="absolute right-2 top-2 rounded-full bg-coral px-1.5 py-0.5 text-[9px] font-bold text-white">
+                        Popular
+                      </span>
+                    ) : null}
+                    {tier.best ? (
+                      <span className="absolute right-2 top-2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                        Best
+                      </span>
+                    ) : null}
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold/15 text-gold">
+                      {tier.popular || tier.best ? (
+                        <Sparkles className="h-4 w-4" />
                       ) : (
-                        <Coins className="h-5 w-5" />
+                        <Coins className="h-4 w-4" />
                       )}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-display text-sm font-bold text-sand">
-                        {tier.title}
-                        {tier.popular ? (
-                          <span className="ml-2 rounded-full bg-coral px-1.5 py-0.5 text-[9px] font-bold text-white">
-                            Popular
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-[11px] text-cyan/75">
-                        {total.toLocaleString()} coins
-                        {tier.bonusCoins ? ` · +${tier.bonusCoins} bonus` : ""}
-                      </p>
-                    </div>
-                    <span className="font-display text-base font-extrabold text-cyan">
+                    <p className="mt-2 font-display text-xl font-extrabold tabular-nums text-sand">
+                      {tier.title}
+                    </p>
+                    <p className="text-[11px] text-gold/90">
+                      {total.toLocaleString()} coins
+                      {tier.bonusCoins
+                        ? ` · +${tier.bonusCoins} bonus`
+                        : ""}
+                    </p>
+                    <p className="mt-1 font-display text-sm font-bold text-cyan">
                       {tier.priceLabel}
-                    </span>
-                  </button>
+                    </p>
+                  </motion.button>
                 );
               })}
             </div>
 
             <p className="mt-4 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
               <ShieldCheck className="h-3 w-3 text-emerald-400" />
-              Payment · Google Play policy
+              Google Play Billing · secure
             </p>
-            <div className="mt-2 space-y-2">
-              {methods.map((m) => {
-                const active = method === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setMethod(m.id)}
-                    className={`flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3.5 text-left ${
-                      active
-                        ? "border-emerald-500 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
-                        : "border-white/10 bg-white/[0.03]"
-                    }`}
-                  >
-                    <span
-                      className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                        active
-                          ? "border-emerald-400 bg-emerald-500 text-white"
-                          : "border-white/30"
-                      }`}
-                    >
-                      {active ? <Check className="h-3 w-3" /> : null}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-2 text-sm font-bold text-sand">
-                        {m.label}
-                        {m.badge ? (
-                          <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
-                            {m.badge}
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-[11px] text-white/55">{m.sub}</p>
-                    </div>
-                    <span className="font-display text-sm font-extrabold text-sand">
-                      {product.priceLabel}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <p className="mt-3 text-[10px] leading-relaxed text-white/45">
-              Virtual coins are digital goods. Per Google Play policy, Zuko uses
-              Google Play Billing only — not third-party wallets (JazzCash /
-              EasyPaisa / cards outside Play).
-            </p>
-
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted">
-                  Price
-                </p>
-                <p className="font-display text-xl font-extrabold text-sand">
-                  {product.priceLabel}
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void payNow()}
-                className="min-w-[9.5rem] rounded-2xl bg-emerald-500 px-5 py-3.5 font-display text-base font-extrabold text-ink shadow-[0_8px_28px_rgba(16,185,129,0.45)] disabled:opacity-60"
-              >
-                {busy
-                  ? "…"
-                  : warningMessage && /insufficient/i.test(warningMessage)
-                    ? "Recharge"
-                    : "Pay now"}
-              </button>
-            </div>
 
             <button
               type="button"
-              onClick={onClose}
-              className="mt-3 w-full py-2 text-center text-xs font-semibold text-white/50"
+              disabled={busy}
+              onClick={() => void payNow()}
+              className="mt-3 mb-2 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-gold via-amber-400 to-coral font-display text-lg font-extrabold text-ink shadow-[0_8px_32px_rgba(255,184,0,0.35)] disabled:opacity-60"
             >
-              Recharge later
+              {busy
+                ? "…"
+                : warningMessage && /insufficient/i.test(warningMessage)
+                  ? `Recharge · ${product.priceLabel}`
+                  : `Pay ${product.priceLabel} · ${totalCoins.toLocaleString()} coins`}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mb-2 w-full py-2 text-center text-xs font-semibold text-white/45"
+            >
+              Not now
             </button>
           </motion.div>
         </>

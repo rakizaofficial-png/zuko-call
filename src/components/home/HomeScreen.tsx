@@ -206,11 +206,12 @@ export function HomeScreen() {
   }, []);
 
   // Main grid: unique hosts not already shown in exclusive rails (no duplicates).
+  // Never pad Live tab with catalog stubs — only real API live hosts.
   const list = useMemo(() => {
     let src = baseList.filter((h) => !sections.claimedIds.has(h.id));
-    if (src.length === 0 && baseList.length === 0) {
+    if (src.length === 0 && baseList.length === 0 && tab === "call") {
       src = uniqueHosts(
-        catalogDiscoverHosts(tab === "live" ? "live" : "call").filter(
+        catalogDiscoverHosts("call").filter(
           (h) =>
             region === "All" ||
             h.country.toLowerCase().includes(region.toLowerCase()),
@@ -218,7 +219,6 @@ export function HomeScreen() {
       ).filter((h) => !sections.claimedIds.has(h.id));
     }
     if (src.length === 0) {
-      // Rails already show everyone — fall back to full unique list without rails overlap
       src = uniqueHosts(baseList);
     }
     return uniqueHosts(rotateHosts(src, rotationSeed));

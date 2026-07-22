@@ -8,6 +8,8 @@ import { WelcomePushEngine } from "@/components/welcome/WelcomePushEngine";
 import { CoinBurstHost } from "@/components/engagement/CoinBurstHost";
 import { ChatUnreadWatcher } from "@/components/ChatUnreadWatcher";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { PushBootstrap } from "@/components/PushBootstrap";
+import { AndroidBackBridge } from "@/components/AndroidBackBridge";
 import "./globals.css";
 
 const syne = Syne({
@@ -55,6 +57,8 @@ export default function RootLayout({
             <ToastHost />
             <WelcomePushEngine />
             <ChatUnreadWatcher />
+            <PushBootstrap />
+            <AndroidBackBridge />
           </div>
         </AppProvider>
       </body>
