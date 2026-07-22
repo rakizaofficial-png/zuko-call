@@ -19,6 +19,7 @@ import {
   mergeDiscoverHosts,
   rotateHosts,
   sectionHosts,
+  uniqueHosts,
   type DiscoverHost,
 } from "@/lib/discoverHosts";
 import { filterBlockedHosts } from "@/lib/socialLists";
@@ -169,7 +170,7 @@ export function HomeScreen() {
         h.country.toLowerCase().includes(region.toLowerCase()),
       );
     }
-    return filterBlockedHosts(list);
+    return uniqueHosts(filterBlockedHosts(list));
   }, [hosts, query, region, category]);
 
   const sections = useMemo(() => sectionHosts(filtered), [filtered]);
@@ -204,19 +205,24 @@ export function HomeScreen() {
     };
   }, []);
 
-  // Keep the feed populated with fresh, rotating faces even when the live API
-  // returns nothing (falls back to catalog hosts), then shuffle by the seed.
+  // Main grid: unique hosts not already shown in exclusive rails (no duplicates).
   const list = useMemo(() => {
-    let src = baseList;
-    if (src.length === 0) {
-      src = catalogDiscoverHosts(tab === "live" ? "live" : "call").filter(
-        (h) =>
-          region === "All" ||
-          h.country.toLowerCase().includes(region.toLowerCase()),
-      );
+    let src = baseList.filter((h) => !sections.claimedIds.has(h.id));
+    if (src.length === 0 && baseList.length === 0) {
+      src = uniqueHosts(
+        catalogDiscoverHosts(tab === "live" ? "live" : "call").filter(
+          (h) =>
+            region === "All" ||
+            h.country.toLowerCase().includes(region.toLowerCase()),
+        ),
+      ).filter((h) => !sections.claimedIds.has(h.id));
     }
-    return rotateHosts(src, rotationSeed);
-  }, [baseList, tab, region, rotationSeed]);
+    if (src.length === 0) {
+      // Rails already show everyone — fall back to full unique list without rails overlap
+      src = uniqueHosts(baseList);
+    }
+    return uniqueHosts(rotateHosts(src, rotationSeed));
+  }, [baseList, tab, region, rotationSeed, sections.claimedIds]);
 
   const runAppIdSearch = async () => {
     const q = query.trim();

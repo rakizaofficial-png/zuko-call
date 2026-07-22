@@ -121,7 +121,8 @@ type AppStore = {
   pushToast: (text: string) => void;
   topUpOpen: boolean;
   topUpGrace: number;
-  openTopUp: (grace?: number) => void;
+  topUpWarning: string | null;
+  openTopUp: (grace?: number, warning?: string | null) => void;
   closeTopUp: () => void;
   entranceBlast: boolean;
   entranceReady: boolean;
@@ -152,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpGrace, setTopUpGrace] = useState(15);
+  const [topUpWarning, setTopUpWarning] = useState<string | null>(null);
   const [entranceBlast, setEntranceBlast] = useState(false);
   const [entranceReady, setEntranceReady] = useState(false);
   // Always start with deterministic SSR defaults — never read localStorage here
@@ -382,14 +384,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const closeTopUp = useCallback(() => {
     setTopUpOpen(false);
+    setTopUpWarning(null);
     if (graceRef.current) {
       clearInterval(graceRef.current);
       graceRef.current = null;
     }
   }, []);
 
-  const openTopUp = useCallback((grace = 15) => {
+  const openTopUp = useCallback((grace = 15, warning: string | null = null) => {
     setTopUpGrace(grace);
+    setTopUpWarning(warning);
     setTopUpOpen(true);
     if (graceRef.current) clearInterval(graceRef.current);
     graceRef.current = setInterval(() => {
@@ -728,6 +732,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pushToast,
       topUpOpen,
       topUpGrace,
+      topUpWarning,
       openTopUp,
       closeTopUp,
       entranceBlast,
@@ -780,6 +785,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pushToast,
       topUpOpen,
       topUpGrace,
+      topUpWarning,
       openTopUp,
       closeTopUp,
       entranceBlast,

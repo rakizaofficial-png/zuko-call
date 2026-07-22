@@ -232,8 +232,9 @@ export default function HostProfilePage({
   };
 
   return (
-    <main className="min-h-dvh overflow-x-hidden bg-[#0b0b0f] pb-28 text-white">
-      <div className="relative h-[min(58vh,420px)] min-h-[280px] w-full max-w-[100vw] overflow-hidden bg-[#16161c]">
+    <main className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-[#0b0b0f] text-white">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
+      <div className="relative h-[min(48vh,360px)] min-h-[240px] w-full max-w-[100vw] overflow-hidden bg-[#16161c]">
         <HostAvatarImg
           src={host.avatarUrl}
           hostId={host.id}
@@ -398,39 +399,41 @@ export default function HostProfilePage({
           </ul>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 pb-2">
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={openChat}
-              className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-[#222]"
-            >
-              <Send className="h-4 w-4" />
-              Message
-            </button>
-            <Link
-              href={
-                host.live
-                  ? `/live/${encodeURIComponent(host.id)}`
-                  : `/call/${encodeURIComponent(host.id)}?live=1`
-              }
-              className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#ff9f1a] py-3.5 text-sm font-bold text-black"
-            >
-              <Video className="h-4 w-4" />
-              {host.live ? "Watch Live" : "Video Call"}
-            </Link>
-          </div>
-          {!host.live ? (
-            <Link
-              href={`/call/${encodeURIComponent(host.id)}?live=1&audio=1`}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 py-3.5 text-sm font-bold text-white"
-            >
-              <Phone className="h-4 w-4" />
-              Audio Call
-            </Link>
-          ) : null}
-        </div>
       </section>
+      </div>
+
+      <div className="safe-footer shrink-0 border-t border-white/10 bg-[#0b0b0f]/95 px-4 py-3 backdrop-blur-xl">
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={openChat}
+            className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white py-3.5 text-sm font-bold text-[#222]"
+          >
+            <Send className="h-4 w-4" />
+            Message
+          </button>
+          <Link
+            href={
+              host.live
+                ? `/live/${encodeURIComponent(host.id)}`
+                : `/call/${encodeURIComponent(host.id)}?live=1`
+            }
+            className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#ff9f1a] py-3.5 text-sm font-bold text-black"
+          >
+            <Video className="h-4 w-4" />
+            {host.live ? "Watch Live" : "Video Call"}
+          </Link>
+        </div>
+        {!host.live ? (
+          <Link
+            href={`/call/${encodeURIComponent(host.id)}?live=1&audio=1`}
+            className="mt-2 flex min-h-12 items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 py-3.5 text-sm font-bold text-white"
+          >
+            <Phone className="h-4 w-4" />
+            Audio Call
+          </Link>
+        ) : null}
+      </div>
 
       <HostProfileAutoCall host={host} />
     </main>

@@ -22,7 +22,7 @@ export function IncomingCallLure({
 }) {
   return (
     <motion.div
-      className="fixed inset-0 z-[100] mx-auto flex w-full max-w-[430px] flex-col overflow-hidden bg-[#06040b]"
+      className="fixed inset-0 z-[100] mx-auto flex h-dvh max-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-[#06040b]"
       initial={{ opacity: 0, y: 28 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -79,7 +79,7 @@ export function IncomingCallLure({
         </motion.span>
       </div>
 
-      <div className="relative z-10 mt-8 flex flex-1 flex-col items-center px-6">
+      <div className="relative z-10 mt-8 flex min-h-0 flex-1 flex-col items-center overflow-hidden px-6">
         <div className="relative">
           <motion.span
             className="absolute -inset-4 rounded-full border-2 border-cyan/50"
@@ -146,7 +146,7 @@ export function IncomingCallLure({
         </p>
       </div>
 
-      <div className="relative z-10 flex items-center justify-center gap-14 px-8 pt-4 safe-footer">
+      <div className="relative z-10 flex shrink-0 items-center justify-center gap-14 px-8 pt-4 safe-footer">
         <button
           type="button"
           onClick={onReject}

@@ -94,6 +94,7 @@ export default function CallSessionClient({
   const feedEndRef = useRef<HTMLDivElement>(null);
   const pushToastRef = useRef(pushToast);
   pushToastRef.current = pushToast;
+  const insufficientExitRef = useRef(false);
 
   function pushFeed(text: string, tone: FeedLine["tone"] = "system") {
     setFeed((prev) =>
@@ -160,8 +161,10 @@ export default function CallSessionClient({
     },
     onFailed: (message) => {
       pushToastRef.current(message);
-      if (/insufficient balance/i.test(message)) {
-        setLowBalanceOpen(true);
+      if (/insufficient balance|insufficient coins|recharge/i.test(message)) {
+        insufficientExitRef.current = true;
+        // Global TopUpSheet survives navigation — do not rely on local modal.
+        openTopUpRef.current(30, "Insufficient Coins — recharge to place a call.");
       }
     },
   });
@@ -181,6 +184,32 @@ export default function CallSessionClient({
     liveHost,
     sessionId,
   } = engine;
+
+  // Insufficient coins at call start — cancel request, show recharge, leave safely
+  useEffect(() => {
+    if (state !== "FAILED" || !insufficientExitRef.current) return;
+    insufficientExitRef.current = false;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await disconnect({ reason: "insufficient_coins" });
+      } catch {
+        /* ignore */
+      }
+      try {
+        await stopUserAgoraCall();
+      } catch {
+        /* ignore */
+      }
+      if (cancelled) return;
+      pushToastRef.current("Insufficient Coins");
+      openTopUpRef.current(30, "Insufficient Coins — recharge to place a call.");
+      router.replace("/call");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state, disconnect, router]);
 
   const isRinging = state === "RINGING" || state === "ROUTING";
   const isConnected = state === "CONNECTED";
@@ -510,7 +539,7 @@ export default function CallSessionClient({
     "flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/12 text-white shadow-[0_8px_28px_rgba(0,0,0,0.35)] backdrop-blur-xl transition active:scale-95";
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-black">
+    <main className="relative h-dvh max-h-dvh overflow-hidden bg-black">
       {isAi && aiHost && (
         <FakeLiveVideoPlayer
           aiHost={aiHost}

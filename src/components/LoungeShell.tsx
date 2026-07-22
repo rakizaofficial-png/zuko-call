@@ -25,6 +25,7 @@ export function LoungeShell({
     openTopUp,
     closeTopUp,
     topUpGrace,
+    topUpWarning,
     triggerEntranceBlast,
     vipTier,
     isPremium,
@@ -62,6 +63,7 @@ export function LoungeShell({
         onClose={closeTopUp}
         graceLeft={topUpGrace}
         minuteRate={minuteRate}
+        warningMessage={topUpWarning ?? undefined}
       />
     </div>
   );

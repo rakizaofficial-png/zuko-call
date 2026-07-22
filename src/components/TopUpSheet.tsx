@@ -113,8 +113,15 @@ export function TopUpSheet({
                   <Zap className="h-3.5 w-3.5" /> Checkout
                 </p>
                 <h3 className="mt-1 font-display text-xl font-extrabold text-sand">
-                  {warningMessage ? "Balance running low" : "Recharge coins"}
+                  {warningMessage
+                    ? /insufficient/i.test(warningMessage)
+                      ? "Insufficient Coins"
+                      : "Balance running low"
+                    : "Recharge coins"}
                 </h3>
+                {warningMessage ? (
+                  <p className="mt-1 text-xs text-rose-300/90">{warningMessage}</p>
+                ) : null}
                 <p className="mt-1 text-xs text-cyan/80">
                   You will get{" "}
                   <span className="font-bold text-gold">
@@ -248,7 +255,11 @@ export function TopUpSheet({
                 onClick={() => void payNow()}
                 className="min-w-[9.5rem] rounded-2xl bg-emerald-500 px-5 py-3.5 font-display text-base font-extrabold text-ink shadow-[0_8px_28px_rgba(16,185,129,0.45)] disabled:opacity-60"
               >
-                {busy ? "…" : "Pay now"}
+                {busy
+                  ? "…"
+                  : warningMessage && /insufficient/i.test(warningMessage)
+                    ? "Recharge"
+                    : "Pay now"}
               </button>
             </div>
 

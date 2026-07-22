@@ -450,20 +450,13 @@ export default function ProfilePage() {
               <span className="font-bold text-sand">{session.user.email}</span>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Link
                 href="/login"
                 className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-coral/35 bg-coral/10 text-xs font-bold text-coral"
               >
                 <LogIn className="h-4 w-4" />
                 Sign in
-              </Link>
-              <Link
-                href="/register"
-                className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-ink-2/70 text-xs font-bold"
-              >
-                <UserPlus className="h-4 w-4" />
-                Register
               </Link>
             </div>
           )}

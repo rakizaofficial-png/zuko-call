@@ -108,7 +108,7 @@ export function listDmThreads(): DmThread[] {
 
 export function getDmMessages(threadId: string): DmMessage[] {
   const all = readJson<Record<string, DmMessage[]>>(MSGS_KEY, {});
-  return all[threadId] || [];
+  return [...(all[threadId] || [])].sort((a, b) => a.at - b.at);
 }
 
 function cacheThread(t: DmThread) {
@@ -120,7 +120,7 @@ function cacheThread(t: DmThread) {
 
 function cacheMessages(threadId: string, messages: DmMessage[]) {
   const all = readJson<Record<string, DmMessage[]>>(MSGS_KEY, {});
-  all[threadId] = messages;
+  all[threadId] = [...messages].sort((a, b) => a.at - b.at);
   writeJson(MSGS_KEY, all);
 }
 
@@ -192,6 +192,7 @@ export async function syncDmFromApi(hostId: string): Promise<DmMessage[]> {
       at: m.createdAt,
       fromId: m.fromId,
     }));
+    mapped.sort((a, b) => a.at - b.at);
     if (mapped.length) cacheMessages(threadId, mapped);
     return mapped.length ? mapped : getDmMessages(threadId);
   } catch {
