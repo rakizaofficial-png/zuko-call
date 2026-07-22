@@ -11,12 +11,14 @@ import {
 } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Platform,
   Pressable,
   StatusBar as RNStatusBar,
   StyleSheet,
   Text,
   View,
+  type NativeEventSubscription,
 } from "react-native";
 import {
   SafeAreaProvider,
@@ -24,7 +26,7 @@ import {
   useSafeAreaInsets,
   initialWindowMetrics,
 } from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
+import { WebView, type WebViewNavigation } from "react-native-webview";
 
 /**
  * Fail-safe Expo shell — loads Zuko web app in a WebView.
@@ -134,9 +136,38 @@ function ZukoWebShell() {
   const autoRetries = useRef(0);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstLoadDone = useRef(false);
+  const webRef = useRef<WebView>(null);
+  const canGoBackRef = useRef(false);
 
   useEffect(() => {
     void loadOrCreateInstallId().then(setInstallId);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub: NativeEventSubscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        // Prefer in-page router.back via injected handler
+        webRef.current?.injectJavaScript(`
+(function(){
+  try {
+    if (typeof window.__ZUKO_ANDROID_BACK__ === 'function') {
+      var handled = window.__ZUKO_ANDROID_BACK__();
+      if (handled) return true;
+    }
+  } catch (e) {}
+  true;
+})();
+true;`);
+        if (canGoBackRef.current) {
+          webRef.current?.goBack();
+          return true;
+        }
+        return false;
+      },
+    );
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
@@ -222,6 +253,16 @@ function ZukoWebShell() {
   window.__ZUKO_SAFE_AREA__ = { top: ${top}, bottom: ${bottom}, left: ${left}, right: ${right}, shellPadded: true };
   window.__ZUKO_ANDROID__ = 1;
   window.__LUMA_INSTALL_ID__ = ${safe || '""'};
+  window.ZukoNativePush = window.ZukoNativePush || {
+    getToken: function(){ return Promise.resolve(null); },
+    setBadge: function(n){
+      try {
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_BADGE', count: n || 0 }));
+        }
+      } catch (e) {}
+    }
+  };
   try {
     if (${safe ? "true" : "false"}) {
       localStorage.setItem('luma_install_id_v1', ${safe || '""'});
@@ -285,10 +326,14 @@ true;`;
           {!waking ? (
             <WebView
               key={webKey}
+              ref={webRef}
               source={source}
               style={styles.webview}
               injectedJavaScriptBeforeContentLoaded={installBridge}
               mediaCapturePermissionGrantType="grant"
+              onNavigationStateChange={(nav: WebViewNavigation) => {
+                canGoBackRef.current = Boolean(nav.canGoBack);
+              }}
               onLoadStart={() => {
                 if (!firstLoadDone.current) {
                   setLoading(true);
@@ -343,6 +388,9 @@ true;`;
                   };
                   if (data.type === "ZUKO_IAP_PURCHASE") {
                     console.log("[zuko] IAP purchase request", data.sku);
+                  }
+                  if (data.type === "ZUKO_BACK_AT_ROOT") {
+                    BackHandler.exitApp();
                   }
                 } catch {
                   /* ignore */

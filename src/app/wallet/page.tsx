@@ -7,13 +7,15 @@ import {
   fetchWalletHistory,
   type WalletLedgerEntry,
 } from "@/lib/walletApi";
+import { listCoinTransactions } from "@/lib/coinLedger";
 import { restorePurchases } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 
-type Tab = "all" | "recharge" | "spend" | "refund";
+type Tab = "all" | "recharge" | "spend" | "refund" | "gift";
 
 export default function WalletPage() {
-  const { coins, syncWallet, engagement, clientReady, pushToast } = useApp();
+  const { coins, syncWallet, engagement, clientReady, pushToast, openTopUp } =
+    useApp();
   const [entries, setEntries] = useState<WalletLedgerEntry[]>([]);
   const [tab, setTab] = useState<Tab>("all");
   const [loading, setLoading] = useState(true);
@@ -22,7 +24,28 @@ export default function WalletPage() {
     setLoading(true);
     try {
       const h = await fetchWalletHistory();
-      setEntries(h.length ? h : engagement.coinHistory);
+      const local = listCoinTransactions(40).map((t) => ({
+        id: t.id,
+        amount: t.amount,
+        reason: `${t.reason} · ${t.status}${t.serverId ? ` · #${t.serverId.slice(0, 8)}` : ""}`,
+        kind: (t.type === "recharge" ||
+        t.type === "refund" ||
+        t.type === "bonus" ||
+        t.type === "referral" ||
+        t.type === "vip"
+          ? "credit"
+          : "spend") as "credit" | "spend",
+        at: t.at,
+      }));
+      const merged = [...(h.length ? h : engagement.coinHistory), ...local];
+      const seen = new Set<string>();
+      setEntries(
+        merged.filter((e) => {
+          if (seen.has(e.id)) return false;
+          seen.add(e.id);
+          return true;
+        }),
+      );
     } catch {
       setEntries(engagement.coinHistory);
     } finally {
@@ -39,10 +62,16 @@ export default function WalletPage() {
     return entries.filter((e) => {
       const reason = (e.reason || "").toLowerCase();
       if (tab === "recharge") {
-        return e.kind === "credit" && /recharge|purchase|iap|top.?up|pack/.test(reason);
+        return (
+          e.kind === "credit" &&
+          /recharge|purchase|iap|top.?up|pack/.test(reason)
+        );
       }
       if (tab === "spend") {
-        return e.kind === "spend";
+        return e.kind === "spend" && !/gift/.test(reason);
+      }
+      if (tab === "gift") {
+        return /gift/.test(reason);
       }
       if (tab === "refund") {
         return /refund/.test(reason);
@@ -81,22 +110,23 @@ export default function WalletPage() {
         <div className="rounded-[1.5rem] border border-gold/30 bg-gradient-to-br from-gold/15 via-ink-2 to-ink p-5">
           <Wallet className="h-6 w-6 text-gold" />
           <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
-            Balance
+            Current balance
           </p>
           <p className="font-display text-4xl font-extrabold tabular-nums">
             {(clientReady ? coins : 0).toLocaleString()}
             <span className="ml-2 text-base font-bold text-gold">coins</span>
           </p>
           <p className="mt-2 text-[11px] text-muted">
-            Prices &amp; balances are server-controlled. Recharge via Google Play
-            Billing only.
+            Every transaction is logged with a unique ID. Server is the source of
+            truth.
           </p>
-          <Link
-            href="/profile"
-            className="mt-4 flex min-h-12 items-center justify-center rounded-2xl bg-coral text-sm font-bold text-white"
+          <button
+            type="button"
+            onClick={() => openTopUp(15)}
+            className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-gold to-coral text-sm font-bold text-ink"
           >
             Recharge coins
-          </Link>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -109,12 +139,6 @@ export default function WalletPage() {
           >
             Restore Play purchases
           </button>
-          <Link
-            href="/payment/result?status=success"
-            className="mt-2 block text-center text-[11px] font-semibold text-cyan"
-          >
-            Payment status screen
-          </Link>
         </div>
 
         <div className="mt-4 flex gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -122,7 +146,8 @@ export default function WalletPage() {
             [
               ["all", "All"],
               ["recharge", "Recharge"],
-              ["spend", "Usage"],
+              ["spend", "Calls"],
+              ["gift", "Gifts"],
               ["refund", "Refunds"],
             ] as const
           ).map(([id, label]) => (
@@ -145,15 +170,15 @@ export default function WalletPage() {
           {loading ? (
             <p className="py-8 text-center text-xs text-muted">Loading…</p>
           ) : filtered.length ? (
-            filtered.slice(0, 40).map((e) => (
+            filtered.slice(0, 50).map((e) => (
               <li
                 key={e.id}
                 className="flex items-center justify-between rounded-2xl border border-line bg-ink-2/50 px-3.5 py-3"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{e.reason}</p>
-                  <p className="text-[10px] text-muted">
-                    {new Date(e.at).toLocaleString()}
+                  <p className="truncate text-[10px] text-muted">
+                    {new Date(e.at).toLocaleString()} · {e.id.slice(0, 18)}
                   </p>
                 </div>
                 <p

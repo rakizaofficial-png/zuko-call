@@ -27,6 +27,7 @@ import {
   setUserSpeaker,
   stopUserAgoraCall,
   switchUserCamera,
+  recoverUserCamera,
 } from "@/lib/agora";
 import { billCallMinute } from "@/lib/callBilling";
 import {
@@ -443,7 +444,7 @@ export default function CallSessionClient({
             pushToast(
               err instanceof Error
                 ? err.message
-                : "Billing error — reconnecting…",
+                : "Billing error — balance will sync shortly",
             );
           } finally {
             billingBusyRef.current = false;
@@ -693,8 +694,12 @@ export default function CallSessionClient({
           onClick={() => {
             if (!isAi) void switchUserCamera();
           }}
+          onDoubleClick={() => {
+            if (!isAi) void recoverUserCamera();
+          }}
           className={fab}
           aria-label="Flip camera"
+          title="Double-tap to recover camera"
         >
           <SwitchCamera className="h-5 w-5" />
         </button>
