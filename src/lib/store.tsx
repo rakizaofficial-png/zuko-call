@@ -69,6 +69,15 @@ import {
 } from "@/lib/userProfile";
 import { getRealtimeClient } from "@/lib/realtime/websocket";
 import { pushRecentHost } from "@/lib/autoCallApi";
+import {
+  hasCompletedTx,
+  markTxCompleted,
+  markTxFailed,
+  markTxRolledBack,
+  recordPendingTx,
+  spendTxId,
+  type CoinTxType,
+} from "@/lib/coinLedger";
 
 type Toast = { id: string; text: string };
 
@@ -100,8 +109,8 @@ type AppStore = {
   endFreeTrial: () => void;
   freeTrialAvailable: boolean;
   enablePushOptIn: () => void;
-  spend: (amount: number, label?: string) => boolean;
-  spendAsync: (amount: number, label?: string) => Promise<boolean>;
+  spend: (amount: number, label?: string, meta?: { type?: CoinTxType; hostId?: string; callId?: string; giftId?: string; clientTxId?: string }) => boolean;
+  spendAsync: (amount: number, label?: string, meta?: { type?: CoinTxType; hostId?: string; callId?: string; giftId?: string; clientTxId?: string }) => Promise<boolean>;
   addCoins: (amount: number, label?: string) => void;
   creditReward: (amount: number, label: string) => Promise<void>;
   syncWallet: () => Promise<import("@/lib/walletApi").WalletSnapshot>;
@@ -570,46 +579,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [pushToast]);
 
   const spendAsync = useCallback(
-    async (amount: number, label?: string) => {
+    async (
+      amount: number,
+      label?: string,
+      meta?: {
+        type?: CoinTxType;
+        hostId?: string;
+        callId?: string;
+        giftId?: string;
+        clientTxId?: string;
+      },
+    ) => {
+      const txId = meta?.clientTxId ?? spendTxId(label || "spend");
+      if (hasCompletedTx(txId)) {
+        await syncWallet();
+        return true;
+      }
+      recordPendingTx({
+        id: txId,
+        userId,
+        amount,
+        type: meta?.type ?? "spend",
+        reason: label || "spend",
+        hostId: meta?.hostId,
+        callId: meta?.callId,
+        giftId: meta?.giftId,
+      });
       try {
         const wallet = await spendCoinsApi({
           amount,
           reason: label || "spend",
+          clientTxId: txId,
+          meta: {
+            hostId: meta?.hostId,
+            callId: meta?.callId,
+            giftId: meta?.giftId,
+            type: meta?.type,
+          },
         });
         setCoins(wallet.coinBalance);
         setXp(wallet.xp);
+        markTxCompleted(txId, { serverId: wallet.transactionId });
         appendLocalHistory(amount, label || "spend", "spend");
         refreshEngagement();
         if (label) pushToast(label);
         return true;
-      } catch {
+      } catch (e) {
+        markTxFailed(txId, e instanceof Error ? e.message : "spend failed");
+        await syncWallet();
         openTopUp(15);
         pushToast("Not enough coins — recharge required");
         return false;
       }
     },
-    [openTopUp, pushToast, refreshEngagement],
+    [openTopUp, pushToast, refreshEngagement, syncWallet, userId],
   );
 
   const spend = useCallback(
-    (amount: number, label?: string) => {
+    (
+      amount: number,
+      label?: string,
+      meta?: {
+        type?: CoinTxType;
+        hostId?: string;
+        callId?: string;
+        giftId?: string;
+        clientTxId?: string;
+      },
+    ) => {
       if (coins < amount) {
         openTopUp(15);
         pushToast("Not enough coins — recharge required");
         return false;
       }
+      const txId = meta?.clientTxId ?? spendTxId(label || "spend");
+      if (hasCompletedTx(txId)) return true;
+      const prevCoins = coins;
+      const prevXp = xp;
       setCoins((c) => c - amount);
       setXp((x) => x + amount);
+      recordPendingTx({
+        id: txId,
+        userId,
+        amount,
+        type: meta?.type ?? "spend",
+        reason: label || "spend",
+        hostId: meta?.hostId,
+        callId: meta?.callId,
+        giftId: meta?.giftId,
+      });
       appendLocalHistory(amount, label || "spend", "spend");
       refreshEngagement();
-      void spendCoinsApi({ amount, reason: label || "spend" }).catch(() => {
-        void syncWallet();
-        openTopUp(15);
-      });
+      void spendCoinsApi({
+        amount,
+        reason: label || "spend",
+        clientTxId: txId,
+        meta: {
+          hostId: meta?.hostId,
+          callId: meta?.callId,
+          giftId: meta?.giftId,
+          type: meta?.type,
+        },
+      })
+        .then((wallet) => {
+          markTxCompleted(txId, { serverId: wallet.transactionId });
+          setCoins(wallet.coinBalance);
+          setXp(wallet.xp);
+        })
+        .catch((e) => {
+          markTxRolledBack(txId, e instanceof Error ? e.message : "spend failed");
+          setCoins(prevCoins);
+          setXp(prevXp);
+          void syncWallet();
+          openTopUp(15);
+          pushToast("Payment failed — balance restored");
+        });
       if (label) pushToast(label);
       return true;
     },
-    [coins, openTopUp, pushToast, refreshEngagement, syncWallet],
+    [coins, openTopUp, pushToast, refreshEngagement, syncWallet, userId, xp],
   );
 
   const addCoins = useCallback(

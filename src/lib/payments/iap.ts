@@ -19,6 +19,7 @@ import { requireApiBase } from "@/config/apiConfig";
 import { getAuthHeaders } from "@/lib/authSession";
 import { getDeviceUserId } from "@/lib/walletApi";
 import { getIapProduct } from "./iapCatalog";
+import { markTxCompleted, recordPendingTx } from "@/lib/coinLedger";
 
 export type IapPlatform = "google" | "apple" | "web";
 
@@ -156,12 +157,22 @@ export async function purchaseCoins(input: {
     try {
       const native = await bridge.purchase(product.platformSku.google);
       if (native?.purchaseToken) {
-        return verifyIapPurchase({
+        const txId = `tx_iap_${input.productId}_${native.purchaseToken.slice(0, 24)}`;
+        recordPendingTx({
+          id: txId,
+          userId,
+          amount: product.coins + product.bonusCoins,
+          type: "recharge",
+          reason: `iap_${input.productId}`,
+        });
+        const verified = await verifyIapPurchase({
           userId,
           productId: input.productId,
           platform: native.platform || "google",
           purchaseToken: native.purchaseToken,
         });
+        markTxCompleted(txId, { serverId: verified.transactionId });
+        return verified;
       }
     } catch {
       // Fall through to hosted Play checkout when native billing isn't linked.

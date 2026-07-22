@@ -2,14 +2,20 @@
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowLeft, Gift, ImagePlus, Send, Smile, Video } from "lucide-react";
+import { ArrowLeft, Gift, ImagePlus, Smile, Video } from "lucide-react";
 import { resolveLiveCreator, threads } from "@/lib/data";
 import { useApp } from "@/lib/store";
 import { GiftSheet } from "@/components/GiftSheet";
 import { HostAvatarImg } from "@/components/host/HostAvatarImg";
-import { VipChatBubble } from "@/components/VipChatBubble";
 import { WalletDiamond } from "@/components/WalletDiamond";
+import {
+  ChatBubble,
+  ChatComposer,
+  ChatImageViewer,
+  ChatShell,
+  ChatTypingIndicator,
+  type ChatMessage,
+} from "@/components/chat";
 import {
   listDmThreads,
   listenDmRealtime,
@@ -25,6 +31,19 @@ import { hostFromId } from "@/lib/discoverHosts";
 import { pickHostAvatarUrl } from "@/lib/hostAvatar";
 import { getDeviceUserId } from "@/lib/walletApi";
 
+const EMOJIS = ["😀", "😍", "🔥", "💕", "😘", "✨", "🎉", "👋", "🥰", "😎"];
+
+function toChatMessage(m: DmMessage): ChatMessage {
+  return {
+    id: m.id,
+    from: m.from,
+    text: m.text,
+    at: m.at,
+    imageUrl: m.imageUrl,
+    read: m.read,
+  };
+}
+
 export default function ChatThreadPage({
   params,
 }: {
@@ -38,17 +57,15 @@ export default function ChatThreadPage({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [hostTyping, setHostTyping] = useState(false);
   const [sending, setSending] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [hostMeta, setHostMeta] = useState({
     id: "",
     name: "Host",
     image: "",
     online: true,
   });
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const userId = useMemo(() => getDeviceUserId(), []);
-  const EMOJIS = ["😀", "😍", "🔥", "💕", "😘", "✨", "🎉", "👋", "🥰", "😎"];
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +110,6 @@ export default function ChatThreadPage({
 
       if (cancelled || !hostId) return;
       setHostMeta({ id: hostId, name, image, online });
-      // Viewing this thread clears its unread (covers seed→DM conversions too).
       markDmRead(threadIdForHost(hostId));
 
       const synced = await syncDmFromApi(hostId);
@@ -104,7 +120,6 @@ export default function ChatThreadPage({
           if (prev.some((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
-        // Message arrived while the thread is open → keep it read.
         markDmRead(threadIdForHost(hostId));
       });
       poll = setInterval(() => {
@@ -120,29 +135,6 @@ export default function ChatThreadPage({
       if (poll) clearInterval(poll);
     };
   }, [id, userId]);
-
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages.length, hostTyping]);
-
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const sync = () => {
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      document.documentElement.style.setProperty("--kb-inset", `${inset}px`);
-    };
-    sync();
-    vv.addEventListener("resize", sync);
-    vv.addEventListener("scroll", sync);
-    return () => {
-      vv.removeEventListener("resize", sync);
-      vv.removeEventListener("scroll", sync);
-      document.documentElement.style.removeProperty("--kb-inset");
-    };
-  }, []);
 
   const send = async (payload?: string, imageUrl?: string) => {
     const outgoing = (payload ?? text).trim();
@@ -197,159 +189,117 @@ export default function ChatThreadPage({
     reader.readAsDataURL(file);
   };
 
-  return (
-    <main className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-[#06040b]">
-      <header className="safe-header z-20 flex shrink-0 items-center gap-3 border-b border-white/10 bg-[#06040b]/95 px-3 py-3 backdrop-blur-xl">
-        <Link href="/messages" className="rounded-full bg-ink-3 p-2">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <Link
-          href={`/host/${encodeURIComponent(hostMeta.id || "x")}`}
-          className="flex min-w-0 flex-1 items-center gap-3"
-        >
-          <HostAvatarImg
-            src={pickHostAvatarUrl(
-              { avatarUrl: hostMeta.image },
-              { hostId: hostMeta.id || id, name: hostMeta.name },
-            )}
-            hostId={hostMeta.id || id}
-            name={hostMeta.name}
-            alt={hostMeta.name}
-            className="h-10 w-10 rounded-full object-cover ring-2 ring-[#ff9f1a]/40"
-          />
-          <div className="min-w-0">
-            <p className="truncate font-display font-bold leading-tight">
-              {hostMeta.name}
-            </p>
-            <p className="text-[11px] font-semibold text-[#22c55e]">
-              {hostMeta.online ? "Online now" : "Last seen recently"}
-            </p>
-          </div>
-        </Link>
-        <WalletDiamond compact />
-        <Link
-          href={`/call/${encodeURIComponent(hostMeta.id || id)}?live=1`}
-          className="rounded-full bg-[#ff9f1a] p-2.5"
-        >
-          <Video className="h-4 w-4 text-black" />
-        </Link>
-      </header>
+  const scrollKey = `${messages.length}:${hostTyping ? 1 : 0}`;
 
-      <div
-        ref={listRef}
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
+  return (
+    <>
+      <ChatShell
+        scrollKey={scrollKey}
+        header={
+          <div className="flex items-center gap-3 px-3 py-3">
+            <Link href="/messages" className="rounded-full bg-ink-3 p-2">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <Link
+              href={`/host/${encodeURIComponent(hostMeta.id || "x")}`}
+              className="flex min-w-0 flex-1 items-center gap-3"
+            >
+              <HostAvatarImg
+                src={pickHostAvatarUrl(
+                  { avatarUrl: hostMeta.image },
+                  { hostId: hostMeta.id || id, name: hostMeta.name },
+                )}
+                hostId={hostMeta.id || id}
+                name={hostMeta.name}
+                alt={hostMeta.name}
+                className="h-10 w-10 rounded-full object-cover ring-2 ring-[#ff9f1a]/40"
+              />
+              <div className="min-w-0">
+                <p className="truncate font-display font-bold leading-tight">
+                  {hostMeta.name}
+                </p>
+                <p className="text-[11px] font-semibold text-[#22c55e]">
+                  {hostMeta.online ? "Online now" : "Last seen recently"}
+                </p>
+              </div>
+            </Link>
+            <WalletDiamond compact />
+            <Link
+              href={`/call/${encodeURIComponent(hostMeta.id || id)}?live=1`}
+              className="rounded-full bg-[#ff9f1a] p-2.5"
+            >
+              <Video className="h-4 w-4 text-black" />
+            </Link>
+          </div>
+        }
+        footer={
+          <ChatComposer
+            value={text}
+            onChange={setText}
+            onSend={() => void send()}
+            sending={sending}
+            placeholder="Write a message…"
+            emojiOpen={emojiOpen}
+            onToggleEmoji={() => setEmojiOpen((v) => !v)}
+            onEmojiPick={(e) => setText((t) => t + e)}
+            emojis={EMOJIS}
+            leading={
+              <>
+                <button
+                  type="button"
+                  onClick={() => setGiftOpen(true)}
+                  className="rounded-full bg-ink-3 p-2.5 text-gold"
+                  aria-label="Gift"
+                >
+                  <Gift className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmojiOpen((v) => !v)}
+                  className="rounded-full bg-ink-3 p-2.5 text-sand"
+                  aria-label="Emoji"
+                >
+                  <Smile className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="rounded-full bg-ink-3 p-2.5 text-sand"
+                  aria-label="Share image"
+                >
+                  <ImagePlus className="h-5 w-5" />
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => void onPickImage(e)}
+                />
+              </>
+            }
+            footerNote="Secure chat · host sees this in CoinCall"
+          />
+        }
       >
         {messages.map((m) => (
-          <motion.div
+          <ChatBubble
             key={m.id}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}
-          >
-            <div className="max-w-[85%]">
-              {m.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={m.imageUrl}
-                  alt="Shared"
-                  className="mb-1 max-h-52 w-full rounded-2xl object-cover ring-1 ring-white/15"
-                />
-              ) : null}
-              <VipChatBubble tier={vipTier} fromMe={m.from === "me"}>
-                {m.text}
-              </VipChatBubble>
-              {m.from === "me" ? (
-                <p className="mt-0.5 text-right text-[10px] text-white/40">
-                  {m.read === false ? "Sent" : "Read"}
-                </p>
-              ) : null}
-            </div>
-          </motion.div>
+            message={toChatMessage(m)}
+            vipTier={vipTier}
+            onImageClick={setPreviewImage}
+          />
         ))}
-        {hostTyping ? (
-          <p className="text-xs text-white/45">{hostMeta.name} is typing…</p>
-        ) : null}
-        <div ref={bottomRef} />
-      </div>
+        {hostTyping ? <ChatTypingIndicator name={hostMeta.name} /> : null}
+      </ChatShell>
 
-      <div
-        className="safe-footer shrink-0 border-t border-white/10 bg-ink-2/95 px-3 py-3"
-        style={{ paddingBottom: "max(0.75rem, var(--kb-inset, 0px))" }}
-      >
-        {emojiOpen ? (
-          <div className="mb-2 flex flex-wrap gap-1.5 rounded-2xl border border-white/10 bg-[#06040b] p-2">
-            {EMOJIS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setText((t) => t + e)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl text-lg"
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setGiftOpen(true)}
-            className="rounded-full bg-ink-3 p-2.5 text-gold"
-            aria-label="Gift"
-          >
-            <Gift className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setEmojiOpen((v) => !v)}
-            className="rounded-full bg-ink-3 p-2.5 text-sand"
-            aria-label="Emoji"
-          >
-            <Smile className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="rounded-full bg-ink-3 p-2.5 text-sand"
-            aria-label="Share image"
-          >
-            <ImagePlus className="h-5 w-5" />
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => void onPickImage(e)}
-          />
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void send()}
-            placeholder="Write a message…"
-            disabled={sending}
-            className="min-w-0 flex-1 rounded-full border border-white/10 bg-[#06040b] px-4 py-2.5 text-sm text-sand outline-none placeholder:text-white/35 disabled:opacity-60"
-          />
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={sending || !text.trim()}
-            className="rounded-full bg-[#ff9f1a] p-2.5 text-black disabled:opacity-40"
-            aria-label="Send"
-          >
-            <Send className="h-4 w-4" />
-          </button>
-        </div>
-        <p className="mt-1.5 text-center text-[10px] text-white/35">
-          Secure chat · host sees this in CoinCall
-        </p>
-      </div>
+      <ChatImageViewer url={previewImage} onClose={() => setPreviewImage(null)} />
 
       <GiftSheet
         open={giftOpen}
         onClose={() => setGiftOpen(false)}
         hostId={hostMeta.id}
       />
-    </main>
+    </>
   );
 }

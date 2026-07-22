@@ -196,6 +196,27 @@ a[role="button"],
   padding-bottom: max(0.75rem, var(--zuko-sab, env(safe-area-inset-bottom, 0px)));
 }
 
+/* Chat — lock document; only the message list scrolls */
+html.chat-keyboard-open,
+body.chat-keyboard-open {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  height: 100%;
+  width: 100%;
+}
+
+.chat-shell {
+  touch-action: manipulation;
+}
+
+.chat-shell-list {
+  touch-action: pan-y;
+}
+
+.chat-shell-footer {
+  will-change: bottom;
+}
+
 .call-stage {
   position: relative;
   width: 100%;

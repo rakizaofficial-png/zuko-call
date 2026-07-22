@@ -5,11 +5,19 @@
 import { requireApiBase } from "@/config/apiConfig";
 import { getDeviceUserId } from "@/lib/walletApi";
 
-export async function billCallMinute(callId: string): Promise<{
+export async function billCallMinute(
+  callId: string,
+  opts?: {
+    clientTxId?: string;
+    minuteIndex?: number;
+    hostId?: string;
+  },
+): Promise<{
   ok: boolean;
   exhausted: boolean;
   amount?: number;
   coinBalance?: number;
+  transactionId?: string;
   error?: string;
 }> {
   const userId = getDeviceUserId();
@@ -21,12 +29,18 @@ export async function billCallMinute(callId: string): Promise<{
         "Content-Type": "application/json",
         "X-User-Id": userId,
       },
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({
+        userId,
+        clientTxId: opts?.clientTxId,
+        minuteIndex: opts?.minuteIndex,
+        hostId: opts?.hostId,
+      }),
     },
   );
   const data = (await res.json().catch(() => ({}))) as {
     error?: string;
     amount?: number;
+    transactionId?: string;
     userWallet?: { coinBalance?: number };
     wallet?: { coinBalance?: number };
   };
@@ -52,5 +66,6 @@ export async function billCallMinute(callId: string): Promise<{
     exhausted: false,
     amount: data.amount,
     coinBalance,
+    transactionId: data.transactionId,
   };
 }

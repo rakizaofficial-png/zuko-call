@@ -9,6 +9,13 @@ import { getDeviceUserId } from "@/lib/walletApi";
 import { requireApiBase } from "@/config/apiConfig";
 import { getRealtimeClient } from "@/lib/realtime/websocket";
 import { playGiftChime } from "@/lib/liveGiftSound";
+import {
+  giftTxId,
+  hasCompletedTx,
+  markTxCompleted,
+  markTxFailed,
+  recordPendingTx,
+} from "@/lib/coinLedger";
 
 function isCinematic(g: Gift) {
   return g.tier === "cinematic" || g.coins >= 250;
@@ -48,8 +55,24 @@ export function GiftSheet({
       return;
     }
     setBusy(true);
+    const txId = giftTxId(g.id, hostId || "none");
+    if (hasCompletedTx(txId)) {
+      setBusy(false);
+      onClose();
+      return;
+    }
     try {
       if (hostId) {
+        recordPendingTx({
+          id: txId,
+          userId: me,
+          hostId,
+          giftId: g.id,
+          callId,
+          amount: g.coins,
+          type: "gift",
+          reason: `gift_${g.id}`,
+        });
         const res = await fetch(`${requireApiBase()}/gifts/send`, {
           method: "POST",
           headers: {
@@ -63,10 +86,17 @@ export function GiftSheet({
             giftId: g.id,
             roomId,
             callId,
+            clientTxId: txId,
           }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Gift failed");
+        if (!res.ok) {
+          markTxFailed(txId, data.error || "Gift failed");
+          throw new Error(data.error || "Gift failed");
+        }
+        markTxCompleted(txId, {
+          serverId: data.transactionId,
+        });
         await syncWallet?.();
         try {
           getRealtimeClient(me).sendGift({

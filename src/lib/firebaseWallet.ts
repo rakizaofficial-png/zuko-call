@@ -65,6 +65,7 @@ export async function transferCallMinuteFb(input: {
   hostId: string;
   amount: number;
   callId: string;
+  minuteIndex: number;
   userName?: string;
   hostName?: string;
 }): Promise<{
@@ -81,6 +82,20 @@ export async function transferCallMinuteFb(input: {
   const amount = Math.max(1, Math.floor(input.amount));
   if (input.userId === input.hostId) {
     return { ok: false, exhausted: false, error: "Hosts cannot gift themselves!" };
+  }
+
+  const db = getFirebaseDb()!;
+  const minuteKey = String(Math.max(1, input.minuteIndex));
+  const billedRef = ref(db, `callBilling/${input.callId}/minutes/${minuteKey}`);
+  const prior = await get(billedRef);
+  if (prior.exists()) {
+    const row = prior.val() as { userBalance?: number };
+    return {
+      ok: true,
+      exhausted: false,
+      amount,
+      userBalance: Number(row.userBalance ?? 0),
+    };
   }
 
   await ensureFbWallet(input.userId, {
@@ -154,8 +169,15 @@ export async function transferCallMinuteFb(input: {
   // Persist call minute + weekly host earnings (free-tier RTDB, no Cloud Functions)
   const weekKey = currentWeekKey();
   const weekStart = startOfWeekMs();
-  const db = getFirebaseDb()!;
   await Promise.all([
+    set(billedRef, {
+      amount,
+      userId: input.userId,
+      hostId: input.hostId,
+      userBalance,
+      hostBalance,
+      at: Date.now(),
+    }).catch(() => undefined),
     runTransaction(ref(db, `callSessions/${input.callId}`), (cur) => {
       if (!cur || typeof cur !== "object") return cur;
       const row = cur as Record<string, unknown>;

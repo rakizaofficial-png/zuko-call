@@ -29,11 +29,18 @@ import {
   switchUserCamera,
 } from "@/lib/agora";
 import { billCallMinute } from "@/lib/callBilling";
+import {
+  callMinuteTxId,
+  hasCompletedTx,
+  markTxCompleted,
+  markTxFailed,
+  recordPendingTx,
+} from "@/lib/coinLedger";
 import { transferCallMinuteFb } from "@/lib/firebaseWallet";
 import { isFirebaseReady } from "@/lib/firebase";
 import { effectiveRate, maxCallMinutes } from "@/lib/ledger";
 import { useApp } from "@/lib/store";
-import { getDeviceUserId, spendCoinsApi } from "@/lib/walletApi";
+import { getDeviceUserId } from "@/lib/walletApi";
 
 type FeedLine = { id: string; text: string; tone?: "system" | "gift" | "bill" };
 
@@ -345,148 +352,91 @@ export default function CallSessionClient({
             const chargeNow = chargeRateRef.current;
             const coinsNow = coinsRef.current;
 
-            // Free-tier Firebase RTDB transaction (no Cloud Functions)
-            if (isFirebaseReady() && userId && hostIdForBill) {
-              const result = await transferCallMinuteFb({
-                userId,
-                hostId: hostIdForBill,
-                amount: chargeNow,
-                callId: billSessionId,
-                userName: myDisplayName,
-                hostName: displayName,
-              });
-              if (result.ok) {
-                const amt = result.amount ?? chargeNow;
-                setDeductFlash(amt);
-                setTimeout(() => setDeductFlash(null), 900);
-                pushFeed(`−${amt} coins · 1 min`, "bill");
-                if (typeof result.userBalance === "number") {
-                  applyLocalCoins(result.userBalance);
-                }
-                // Mirror Express ledger so later syncWallet cannot restore coins
-                try {
-                  await spendCoinsApi({
-                    amount: amt,
-                    reason: `call_minute_fb_mirror_${billSessionId}`,
-                    meta: { hostId: hostIdForBill, mirroredFrom: "firebase" },
-                  });
-                } catch {
-                  /* Express may already be lower — UI trusts Firebase balance */
-                }
-                const nextBal = result.userBalance ?? coinsNow - amt;
-                if (nextBal < chargeNow) {
-                  await exhaustRef.current();
-                } else if (maxCallMinutes(nextBal, chargeNow) <= 1) {
-                  lowBalanceWarnedRef.current = false;
-                  lowBalance60WarnedRef.current = false;
-                }
-              } else if (result.exhausted) {
-                // RTDB may be stale — try Express wallet before cutting
-                await syncWallet?.();
-                if (coinsRef.current >= chargeNow && bridgeCall?.id && !isAi) {
-                  const expr = await billCallMinute(bridgeCall.id);
-                  if (expr.ok) {
-                    const amt = expr.amount ?? chargeNow;
-                    setDeductFlash(amt);
-                    setTimeout(() => setDeductFlash(null), 900);
-                    pushFeed(`−${amt} coins · 1 min`, "bill");
-                    await syncWallet?.();
-                    const nextBal = expr.coinBalance ?? coinsRef.current;
-                    if (nextBal < chargeNow) await exhaustRef.current();
-                  } else if (expr.exhausted) {
-                    await exhaustRef.current();
-                  } else {
-                    pushToast(expr.error || "Billing failed");
-                  }
-                } else if (coinsRef.current >= chargeNow) {
-                  const ok = await spendAsync(
-                    chargeNow,
-                    `−${chargeNow} coins · 1 min`,
-                  );
-                  if (ok) {
-                    setDeductFlash(chargeNow);
-                    setTimeout(() => setDeductFlash(null), 900);
-                    pushFeed(`−${chargeNow} coins · 1 min`, "bill");
-                  } else {
-                    await exhaustRef.current();
-                  }
-                } else {
-                  await exhaustRef.current();
-                }
-              } else {
-                // Firebase failed — Express fallback (single path, no double charge)
-                if (bridgeCall?.id && !isAi) {
-                  const expr = await billCallMinute(bridgeCall.id);
-                  if (expr.ok) {
-                    const amt = expr.amount ?? chargeNow;
-                    setDeductFlash(amt);
-                    setTimeout(() => setDeductFlash(null), 900);
-                    pushFeed(`−${amt} coins · 1 min`, "bill");
-                    await syncWallet?.();
-                    const nextBal = expr.coinBalance ?? coinsNow - amt;
-                    if (nextBal < chargeNow) await exhaustRef.current();
-                  } else if (expr.exhausted) {
-                    await exhaustRef.current();
-                  } else {
-                    pushToast(expr.error || result.error || "Billing failed");
-                  }
-                } else {
-                  const ok = await spendAsync(
-                    chargeNow,
-                    `−${chargeNow} coins · 1 min`,
-                  );
-                  if (ok) {
-                    setDeductFlash(chargeNow);
-                    setTimeout(() => setDeductFlash(null), 900);
-                    pushFeed(`−${chargeNow} coins · 1 min`, "bill");
-                  } else {
-                    await exhaustRef.current();
-                  }
-                }
+            const minuteIndex = Math.floor(next / 60);
+            const txId = callMinuteTxId(billSessionId, minuteIndex);
+            if (hasCompletedTx(txId)) {
+              billingBusyRef.current = false;
+              return;
+            }
+
+            recordPendingTx({
+              id: txId,
+              userId: userId || getDeviceUserId(),
+              hostId: hostIdForBill,
+              callId: billSessionId,
+              amount: chargeNow,
+              type: "call_minute",
+              reason: `call_minute_${billSessionId}_m${minuteIndex}`,
+            });
+
+            const onMinuteBilled = (amt: number, nextBal?: number) => {
+              setDeductFlash(amt);
+              setTimeout(() => setDeductFlash(null), 900);
+              pushFeed(`−${amt} coins · 1 min`, "bill");
+              markTxCompleted(txId);
+              const bal =
+                typeof nextBal === "number" ? nextBal : coinsNow - amt;
+              if (typeof nextBal === "number") applyLocalCoins(nextBal);
+              if (bal < chargeNow) {
+                void exhaustRef.current();
+              } else if (maxCallMinutes(bal, chargeNow) <= 1) {
+                lowBalanceWarnedRef.current = false;
+                lowBalance60WarnedRef.current = false;
               }
-            } else if (bridgeCall?.id && !isAi) {
-              const result = await billCallMinute(bridgeCall.id);
-              if (result.ok) {
-                const amt = result.amount ?? chargeNow;
-                setDeductFlash(amt);
-                setTimeout(() => setDeductFlash(null), 900);
-                pushFeed(`−${amt} coins · 1 min`, "bill");
+            };
+
+            // Authoritative path: Express API (idempotent per minute)
+            if (bridgeCall?.id && !isAi) {
+              const expr = await billCallMinute(bridgeCall.id, {
+                clientTxId: txId,
+                minuteIndex,
+                hostId: hostIdForBill,
+              });
+              if (expr.ok) {
                 await syncWallet?.();
-                const nextBal = result.coinBalance ?? coinsNow - amt;
-                if (nextBal < chargeNow) {
-                  await exhaustRef.current();
-                } else if (maxCallMinutes(nextBal, chargeNow) <= 1) {
-                  lowBalanceWarnedRef.current = false;
-                  lowBalance60WarnedRef.current = false;
-                }
-              } else if (result.exhausted) {
+                onMinuteBilled(
+                  expr.amount ?? chargeNow,
+                  expr.coinBalance ?? coinsRef.current,
+                );
+              } else if (expr.exhausted) {
+                markTxFailed(txId, expr.error || "exhausted");
                 await exhaustRef.current();
+              } else if (isFirebaseReady() && userId && hostIdForBill) {
+                const fb = await transferCallMinuteFb({
+                  userId,
+                  hostId: hostIdForBill,
+                  amount: chargeNow,
+                  callId: billSessionId,
+                  minuteIndex,
+                  userName: myDisplayName,
+                  hostName: displayName,
+                });
+                if (fb.ok) {
+                  onMinuteBilled(fb.amount ?? chargeNow, fb.userBalance);
+                } else if (fb.exhausted) {
+                  markTxFailed(txId, "exhausted");
+                  await exhaustRef.current();
+                } else {
+                  markTxFailed(txId, fb.error || "billing failed");
+                  pushToast(fb.error || "Billing failed");
+                }
               } else {
-                pushToast(result.error || "Billing failed");
+                markTxFailed(txId, expr.error || "billing failed");
+                pushToast(expr.error || "Billing failed");
               }
             } else {
-              const ok = await spendAsync(
-                chargeNow,
-                `−${chargeNow} coins · 1 min`,
-              );
+              const ok = await spendAsync(chargeNow, `−${chargeNow} coins · 1 min`, {
+                type: isAi ? "video_call" : "call_minute",
+                callId: billSessionId,
+                hostId: hostIdForBill,
+                clientTxId: txId,
+              });
               if (ok) {
-                setDeductFlash(chargeNow);
-                setTimeout(() => setDeductFlash(null), 900);
-                pushFeed(`−${chargeNow} coins · 1 min`, "bill");
+                onMinuteBilled(chargeNow);
                 await syncWallet?.();
               } else {
-                try {
-                  await spendCoinsApi({
-                    amount: chargeNow,
-                    reason: `call_minute_ai_${id}`,
-                  });
-                  setDeductFlash(chargeNow);
-                  setTimeout(() => setDeductFlash(null), 900);
-                  pushFeed(`−${chargeNow} coins · 1 min`, "bill");
-                  await syncWallet?.();
-                } catch {
-                  await exhaustRef.current();
-                }
+                markTxFailed(txId, "spend failed");
+                await exhaustRef.current();
               }
             }
           } catch (err) {

@@ -249,36 +249,48 @@ export async function refreshWallet(): Promise<WalletSnapshot> {
 export async function spendCoinsApi(input: {
   amount: number;
   reason: string;
+  clientTxId?: string;
   meta?: Record<string, unknown>;
-}): Promise<WalletSnapshot> {
+}): Promise<WalletSnapshot & { transactionId?: string }> {
   const userId = deviceUserId();
-  const data = await api<{ wallet: WalletSnapshot }>("/wallet/spend", {
+  const data = await api<{
+    wallet: WalletSnapshot;
+    transactionId?: string;
+  }>("/wallet/spend", {
     method: "POST",
     body: JSON.stringify({
       userId,
       amount: input.amount,
       reason: input.reason,
+      clientTxId: input.clientTxId,
       meta: input.meta,
     }),
   });
-  return data.wallet;
+  return { ...data.wallet, transactionId: data.transactionId };
 }
 
 /** Credit coins (rewards, check-in, spin, referral) — server authoritative */
 export async function creditCoinsApi(input: {
   amount: number;
   reason: string;
-}): Promise<WalletSnapshot> {
+  clientTxId?: string;
+  meta?: Record<string, unknown>;
+}): Promise<WalletSnapshot & { transactionId?: string }> {
   const userId = deviceUserId();
-  const data = await api<{ wallet: WalletSnapshot }>("/wallet/credit", {
+  const data = await api<{
+    wallet: WalletSnapshot;
+    transactionId?: string;
+  }>("/wallet/credit", {
     method: "POST",
     body: JSON.stringify({
       userId,
       amount: input.amount,
       reason: input.reason,
+      clientTxId: input.clientTxId,
+      meta: input.meta,
     }),
   });
-  return data.wallet;
+  return { ...data.wallet, transactionId: data.transactionId };
 }
 
 export type WalletLedgerEntry = {
