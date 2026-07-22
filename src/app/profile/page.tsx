@@ -231,7 +231,7 @@ export default function ProfilePage() {
 
   return (
     <main className="pb-28">
-      <header className="sticky top-0 z-30 flex items-center justify-between bg-ink/80 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
+      <header className="safe-header sticky top-0 z-30 flex items-center justify-between bg-ink/80 px-4 pb-3 backdrop-blur-xl">
         <div>
           <p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-coral">
             Zuko

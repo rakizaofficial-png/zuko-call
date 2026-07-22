@@ -179,7 +179,7 @@ export default function ChatThreadPage({
 
   return (
     <main className="flex min-h-dvh flex-col bg-[#06040b]">
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/10 bg-[#06040b]/90 px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
+      <header className="safe-header sticky top-0 z-20 flex items-center gap-3 border-b border-white/10 bg-[#06040b]/90 px-3 py-3 backdrop-blur-xl">
         <Link href="/messages" className="rounded-full bg-ink-3 p-2">
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -249,7 +249,7 @@ export default function ChatThreadPage({
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-white/10 bg-ink-2/80 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="safe-footer border-t border-white/10 bg-ink-2/80 px-3 py-3">
         {emojiOpen ? (
           <div className="mb-2 flex flex-wrap gap-1.5 rounded-2xl border border-white/10 bg-[#06040b] p-2">
             {EMOJIS.map((e) => (

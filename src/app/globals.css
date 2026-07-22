@@ -15,6 +15,11 @@
   --glow: rgba(255, 42, 122, 0.4);
   --background: var(--ink);
   --foreground: var(--sand);
+  /* Safe areas: prefer browser env, then native-injected --zuko-* */
+  --zuko-sat: env(safe-area-inset-top, 0px);
+  --zuko-sab: env(safe-area-inset-bottom, 0px);
+  --zuko-sal: env(safe-area-inset-left, 0px);
+  --zuko-sar: env(safe-area-inset-right, 0px);
 }
 
 @theme inline {
@@ -175,11 +180,20 @@ a[role="button"],
 
 .safe-bottom {
   /* Reserve space so bottom nav never covers CTAs / thumb actions */
-  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(5.75rem + var(--zuko-sab, env(safe-area-inset-bottom, 0px)));
 }
 
 .safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: var(--zuko-sat, env(safe-area-inset-top, 0px));
+}
+
+/* Headers / sticky chrome — never collide with status bar / cutout */
+.safe-header {
+  padding-top: max(0.75rem, var(--zuko-sat, env(safe-area-inset-top, 0px)));
+}
+
+.safe-footer {
+  padding-bottom: max(0.75rem, var(--zuko-sab, env(safe-area-inset-bottom, 0px)));
 }
 
 .call-stage {

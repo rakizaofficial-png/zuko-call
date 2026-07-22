@@ -104,7 +104,7 @@ export function TopUpSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
-            className="fixed bottom-0 left-1/2 z-[75] max-h-[92dvh] w-full max-w-[430px] -translate-x-1/2 overflow-y-auto rounded-t-[1.75rem] border border-cyan/35 bg-[#0a0812]/98 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 shadow-[0_-24px_80px_rgba(0,240,255,0.18)] backdrop-blur-xl"
+            className="fixed bottom-0 left-1/2 z-[75] max-h-[92dvh] w-full max-w-[430px] -translate-x-1/2 overflow-y-auto rounded-t-[1.75rem] border border-cyan/35 bg-[#0a0812]/98 px-4 pt-4 shadow-[0_-24px_80px_rgba(0,240,255,0.18)] backdrop-blur-xl safe-footer"
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-cyan/40" />
             <div className="mb-1 flex items-start justify-between gap-3">

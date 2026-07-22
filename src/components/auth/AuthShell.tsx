@@ -17,7 +17,7 @@ export function AuthShell({
   footer?: ReactNode;
 }) {
   return (
-    <main className="relative min-h-dvh overflow-x-hidden px-4 pb-10 pt-[max(1.25rem,env(safe-area-inset-top))]">
+    <main className="safe-header relative min-h-dvh overflow-x-hidden px-4 pb-10">
       <div className="pointer-events-none absolute -left-16 top-0 h-56 w-56 rounded-full bg-coral/25 blur-3xl" />
       <div className="pointer-events-none absolute -right-10 bottom-24 h-48 w-48 rounded-full bg-cyan/15 blur-3xl" />
 

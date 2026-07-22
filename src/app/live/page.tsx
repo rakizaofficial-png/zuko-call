@@ -204,7 +204,7 @@ export default function LivePage() {
   return (
     <main className="min-h-dvh overflow-x-hidden bg-[#0b0b0f] pb-28 text-white">
       {/* Top tabs — mobile reference */}
-      <header className="sticky top-0 z-20 border-b border-white/5 bg-[#0b0b0f]/95 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-md">
+      <header className="safe-header sticky top-0 z-20 border-b border-white/5 bg-[#0b0b0f]/95 px-3 backdrop-blur-md">
         <div className="flex items-end gap-2">
           <nav className="flex min-w-0 flex-1 gap-5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {TABS.map((t) => (

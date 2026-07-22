@@ -245,7 +245,7 @@ export function HomeScreen() {
     <main className="relative pb-28">
       <header
         ref={headerRef}
-        className="fixed left-1/2 top-0 z-40 w-full max-w-[430px] -translate-x-1/2 border-b border-line/50 bg-ink/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl"
+        className="safe-header fixed left-1/2 top-0 z-40 w-full max-w-[430px] -translate-x-1/2 border-b border-line/50 bg-ink/90 px-4 pb-3 backdrop-blur-xl"
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">

@@ -126,7 +126,7 @@ export default function PremiumPage() {
 
   return (
     <main>
-      <header className="sticky top-0 z-30 flex items-center gap-3 bg-ink/80 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
+      <header className="safe-header sticky top-0 z-30 flex items-center gap-3 bg-ink/80 px-4 pb-3 backdrop-blur-xl">
         <Link href="/" className="rounded-full bg-ink-3 p-2">
           <ArrowLeft className="h-5 w-5" />
         </Link>

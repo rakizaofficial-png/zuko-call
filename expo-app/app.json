@@ -2,11 +2,17 @@
   "expo": {
     "name": "Zuko",
     "slug": "zuko",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": false,
+    "androidStatusBar": {
+      "backgroundColor": "#0b0d12",
+      "barStyle": "light-content",
+      "translucent": false,
+      "hidden": false
+    },
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -23,7 +29,7 @@
     },
     "android": {
       "package": "com.zuko.user",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0b0d12"
@@ -49,6 +55,7 @@
     },
     "owner": "salman112211",
     "plugins": [
+      "expo-system-ui",
       [
         "expo-build-properties",
         {

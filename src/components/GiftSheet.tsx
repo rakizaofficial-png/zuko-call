@@ -125,7 +125,7 @@ export function GiftSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
-            className="fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 rounded-t-3xl border border-line bg-ink-2 px-4 pb-8 pt-4"
+            className="safe-footer fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 rounded-t-3xl border border-line bg-ink-2 px-4 pb-8 pt-4"
           >
             <div className="mb-4 flex items-center justify-between">
               <div>

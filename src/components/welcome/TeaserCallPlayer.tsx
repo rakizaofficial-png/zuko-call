@@ -158,7 +158,7 @@ export function TeaserCallPlayer({
       <div className="absolute inset-0 z-[3]" />
 
       <motion.div
-        className="absolute left-4 top-[max(0.75rem,env(safe-area-inset-top))] z-10 flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 backdrop-blur"
+        className="absolute left-4 top-3 z-10 flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 backdrop-blur"
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
       >
@@ -169,7 +169,7 @@ export function TeaserCallPlayer({
       </motion.div>
 
       <motion.div
-        className="absolute right-4 top-[max(0.75rem,env(safe-area-inset-top))] z-10 rounded-full border border-gold/40 bg-black/50 px-3 py-1.5 backdrop-blur"
+        className="absolute right-4 top-3 z-10 rounded-full border border-gold/40 bg-black/50 px-3 py-1.5 backdrop-blur"
         key={displayLeft}
         initial={{ scale: 0.92 }}
         animate={{ scale: 1 }}

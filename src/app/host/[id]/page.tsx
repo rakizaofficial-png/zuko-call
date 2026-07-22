@@ -244,7 +244,7 @@ export default function HostProfilePage({
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-transparent to-[#0b0b0f]" />
 
-        <div className="absolute left-0 right-0 top-0 flex items-center justify-between gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="safe-header absolute left-0 right-0 top-0 flex items-center justify-between gap-2 px-3">
           <Link
             href="/"
             className="rounded-full bg-black/45 p-2.5 backdrop-blur-md"
@@ -295,7 +295,7 @@ export default function HostProfilePage({
         </div>
 
         {menuOpen ? (
-          <div className="absolute right-3 top-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))] z-20 w-44 overflow-hidden rounded-2xl border border-white/15 bg-[#15151c]/95 shadow-xl backdrop-blur-xl">
+          <div className="absolute right-3 top-16 z-20 w-44 overflow-hidden rounded-2xl border border-white/15 bg-[#15151c]/95 shadow-xl backdrop-blur-xl">
             <button
               type="button"
               onClick={onReport}

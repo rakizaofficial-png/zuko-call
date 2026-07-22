@@ -87,7 +87,7 @@ export function RechargePaywallSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed bottom-0 left-1/2 z-[120] w-full max-w-[430px] -translate-x-1/2 rounded-t-[1.75rem] border border-cyan/30 bg-[#0a0812]/95 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-30px_80px_rgba(255,42,122,0.25)] backdrop-blur-xl"
+            className="fixed bottom-0 left-1/2 z-[120] w-full max-w-[430px] -translate-x-1/2 rounded-t-[1.75rem] border border-cyan/30 bg-[#0a0812]/95 px-4 pt-3 shadow-[0_-30px_80px_rgba(255,42,122,0.25)] backdrop-blur-xl safe-footer"
           >
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-cyan/40" />
 

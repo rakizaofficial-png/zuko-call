@@ -215,7 +215,7 @@ export function SwipeFeed() {
   return (
     <LoungeShell minuteRate={rate}>
       <div
-        className="relative h-[calc(100dvh-5.5rem-env(safe-area-inset-bottom))] overflow-hidden bg-[#06040b]"
+        className="relative h-[calc(100dvh-5.5rem-var(--zuko-sab,0px))] overflow-hidden bg-[#06040b]"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
         onWheel={(e) => {
@@ -247,7 +247,7 @@ export function SwipeFeed() {
           </motion.div>
         </AnimatePresence>
 
-        <div className="pointer-events-none relative z-10 flex h-full flex-col px-4 pb-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="safe-header pointer-events-none relative z-10 flex h-full flex-col px-4 pb-4">
           <div className="pointer-events-auto flex items-start justify-between gap-3">
             <VipRibbon />
             <div className="flex items-center gap-2">

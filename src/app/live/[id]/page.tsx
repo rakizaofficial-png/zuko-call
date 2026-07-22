@@ -514,7 +514,7 @@ export default function HostOnlyLiveRoomPage({
 
       <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/50 via-transparent to-black/80" />
 
-      <div className="relative z-10 flex min-h-dvh flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <div className="safe-header relative z-10 flex min-h-dvh flex-col px-3 safe-footer">
         {/* Header */}
         <div className="pointer-events-auto flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/20 bg-black/35 py-1 pl-1 pr-2 shadow-lg backdrop-blur-md">

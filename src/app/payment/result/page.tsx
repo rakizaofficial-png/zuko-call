@@ -31,7 +31,7 @@ function PaymentResultInner() {
   };
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center overflow-x-hidden px-6 pb-16 pt-[max(1rem,env(safe-area-inset-top))] text-center">
+    <main className="safe-header flex min-h-dvh flex-col items-center justify-center overflow-x-hidden px-6 pb-16 text-center">
       {ok ? (
         <CheckCircle2 className="h-16 w-16 text-teal" />
       ) : (

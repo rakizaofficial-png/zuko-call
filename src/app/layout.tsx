@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Syne, Manrope } from "next/font/google";
 import { AppProvider } from "@/lib/store";
 import { BottomNav } from "@/components/BottomNav";
@@ -26,6 +26,15 @@ export const metadata: Metadata = {
   title: "Zuko — Premium voice & video calling",
   description:
     "Discover hosts, 1v1 calls, daily rewards, Lucky Spin, VIP, and coins — a premium live calling experience.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#0b0d12",
 };
 
 export default function RootLayout({

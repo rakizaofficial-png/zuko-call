@@ -74,7 +74,7 @@ export default function PartyAudiencePage({
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#06040b]/70 via-transparent to-[#06040b]" />
 
-        <div className="relative z-10 flex min-h-dvh flex-col px-4 pb-8 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="safe-header relative z-10 flex min-h-dvh flex-col px-4 pb-8">
           <div className="flex items-center justify-between gap-3">
             <Link
               href="/"

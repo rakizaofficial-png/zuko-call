@@ -564,7 +564,7 @@ export default function CallSessionClient({
       <CoinDeductFlash amount={deductFlash} />
 
       {/* Floating glass header */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-[max(0.6rem,env(safe-area-inset-top))]">
+      <header className="safe-header pointer-events-none absolute inset-x-0 top-0 z-20 px-3">
         <div className="flex items-start justify-between gap-2">
           <div className="pointer-events-auto flex max-w-[70%] items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1 pl-1 pr-3 shadow-lg backdrop-blur-xl">
             <HostAvatarImg
@@ -634,7 +634,7 @@ export default function CallSessionClient({
       <motion.div
         initial={{ opacity: 0, scale: 0.92 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="absolute right-3 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-20 h-[min(148px,22vh)] w-[min(108px,28vw)] max-h-[160px] max-w-[120px] overflow-hidden rounded-[22px] border border-white/35 bg-black/40 shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_12px_40px_rgba(0,0,0,0.45),0_0_28px_rgba(255,77,122,0.25)]"
+        className="absolute right-3 top-20 z-20 h-[min(148px,22vh)] w-[min(108px,28vw)] max-h-[160px] max-w-[120px] overflow-hidden rounded-[22px] border border-white/35 bg-black/40 shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_12px_40px_rgba(0,0,0,0.45),0_0_28px_rgba(255,77,122,0.25)]"
       >
         <div
           ref={localRef}
@@ -675,7 +675,7 @@ export default function CallSessionClient({
       </div>
 
       {/* Floating circular actions — thumb-reachable, never off-screen */}
-      <div className="pointer-events-auto absolute bottom-[max(1.1rem,env(safe-area-inset-bottom))] right-3 z-30 flex max-h-[55vh] flex-col items-center gap-2.5 overflow-y-auto">
+      <div className="pointer-events-auto absolute bottom-3 right-3 z-30 flex max-h-[55vh] flex-col items-center gap-2.5 overflow-y-auto">
         <button
           type="button"
           onClick={() => {

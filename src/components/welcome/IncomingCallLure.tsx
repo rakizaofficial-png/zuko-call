@@ -64,7 +64,7 @@ export function IncomingCallLure({
         transition={{ duration: 2.8, repeat: Infinity, delay: 0.4 }}
       />
 
-      <div className="relative z-10 flex items-center justify-between px-5 pt-[max(1rem,env(safe-area-inset-top))]">
+      <div className="safe-header relative z-10 flex items-center justify-between px-5">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan">
           Zuko · Private call
         </p>
@@ -146,7 +146,7 @@ export function IncomingCallLure({
         </p>
       </div>
 
-      <div className="relative z-10 flex items-center justify-center gap-14 px-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4">
+      <div className="relative z-10 flex items-center justify-center gap-14 px-8 pt-4 safe-footer">
         <button
           type="button"
           onClick={onReject}
