@@ -84,6 +84,57 @@ export async function restorePurchases(userId?: string): Promise<{
   message: string;
 }> {
   const id = userId || getDeviceUserId();
+  const nativeBridge = (
+    window as unknown as {
+      LumaNativeIap?: {
+        restore?: () => Promise<
+          Array<{
+            platform: IapPlatform;
+            productId: string;
+            purchaseToken: string;
+          }>
+        >;
+        finish?: (purchaseToken: string) => Promise<void>;
+      };
+    }
+  ).LumaNativeIap;
+
+  if (nativeBridge?.restore) {
+    try {
+      const purchases = await nativeBridge.restore();
+      let restoredCount = 0;
+      let latestBalance: number | undefined;
+
+      for (const purchase of purchases) {
+        const product = getIapProduct(purchase.productId);
+        if (!product || !purchase.purchaseToken) continue;
+        const verified = await verifyIapPurchase({
+          userId: id,
+          productId: product.productId,
+          platform: purchase.platform || "google",
+          purchaseToken: purchase.purchaseToken,
+        });
+        await nativeBridge.finish?.(purchase.purchaseToken);
+        restoredCount += 1;
+        latestBalance = verified.balance;
+      }
+
+      return {
+        restored: restoredCount > 0,
+        balance: latestBalance,
+        message:
+          restoredCount > 0
+            ? `${restoredCount} purchase restored`
+            : "No pending purchases to restore",
+      };
+    } catch (e) {
+      return {
+        restored: false,
+        message: e instanceof Error ? e.message : "Restore unavailable",
+      };
+    }
+  }
+
   try {
     const data = await apiJson<{
       ok?: boolean;
@@ -140,43 +191,63 @@ export async function purchaseCoins(input: {
   const userId = getDeviceUserId() || input.userId;
   if (!userId) throw new Error("Profile not ready — reopen the app");
 
-  const bridge = (
-    window as unknown as {
-      LumaNativeIap?: {
-        purchase: (sku: string) => Promise<{
-          platform: IapPlatform;
-          purchaseToken: string;
-        }>;
-      };
-    }
-  ).LumaNativeIap;
+  const nativeWindow = window as unknown as {
+    __ZUKO_ANDROID__?: number;
+    ZukoNativeIap?: {
+      isNativeGooglePlay?: boolean;
+      purchase: (sku: string) => Promise<{
+        platform: IapPlatform;
+        productId?: string;
+        purchaseToken: string;
+      }>;
+      finish?: (purchaseToken: string) => Promise<void>;
+    };
+    LumaNativeIap?: {
+      isNativeGooglePlay?: boolean;
+      purchase: (sku: string) => Promise<{
+        platform: IapPlatform;
+        productId?: string;
+        purchaseToken: string;
+      }>;
+      finish?: (purchaseToken: string) => Promise<void>;
+    };
+  };
+  const bridge =
+    nativeWindow.ZukoNativeIap ||
+    nativeWindow.LumaNativeIap;
 
   if (bridge?.purchase) {
     const product = getIapProduct(input.productId);
     if (!product) throw new Error("Unknown product");
-    try {
-      const native = await bridge.purchase(product.platformSku.google);
-      if (native?.purchaseToken) {
-        const txId = `tx_iap_${input.productId}_${native.purchaseToken.slice(0, 24)}`;
-        recordPendingTx({
-          id: txId,
-          userId,
-          amount: product.coins + product.bonusCoins,
-          type: "recharge",
-          reason: `iap_${input.productId}`,
-        });
-        const verified = await verifyIapPurchase({
-          userId,
-          productId: input.productId,
-          platform: native.platform || "google",
-          purchaseToken: native.purchaseToken,
-        });
-        markTxCompleted(txId, { serverId: verified.transactionId });
-        return verified;
-      }
-    } catch {
-      // Fall through to hosted Play checkout when native billing isn't linked.
+    const native = await bridge.purchase(product.platformSku.google);
+    if (native?.purchaseToken) {
+      const txId = `tx_iap_${input.productId}_${native.purchaseToken.slice(0, 24)}`;
+      recordPendingTx({
+        id: txId,
+        userId,
+        amount: product.coins + product.bonusCoins,
+        type: "recharge",
+        reason: `iap_${input.productId}`,
+      });
+      const verified = await verifyIapPurchase({
+        userId,
+        productId: input.productId,
+        platform: native.platform || "google",
+        purchaseToken: native.purchaseToken,
+      });
+      await bridge.finish?.(native.purchaseToken);
+      markTxCompleted(txId, { serverId: verified.transactionId });
+      return verified;
     }
+    throw new Error("Google Play did not return a purchase token");
+  }
+
+  // Never send an Android app user to a hosted/browser checkout. Play builds
+  // must open the native Google Play purchase sheet through the RN bridge.
+  if (nativeWindow.__ZUKO_ANDROID__) {
+    throw new Error(
+      "Google Play Billing is not connected. Reopen Zuko from the Play Store internal test track and try again.",
+    );
   }
 
   const session = await createIapCheckoutSession({
