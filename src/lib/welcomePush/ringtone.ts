@@ -5,6 +5,7 @@
 
 let ctx: AudioContext | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
+const activeNodes = new Set<AudioScheduledSourceNode>();
 
 function getCtx() {
   if (typeof window === "undefined") return null;
@@ -31,6 +32,8 @@ function dualTone(durationSec: number) {
     osc.type = "sine";
     osc.frequency.value = freq;
     osc.connect(master);
+    activeNodes.add(osc);
+    osc.addEventListener("ended", () => activeNodes.delete(osc), { once: true });
     osc.start(now);
     osc.stop(now + durationSec + 0.02);
   }
@@ -69,6 +72,15 @@ export function stopWelcomeRingTone() {
     clearInterval(timer);
     timer = null;
   }
+  for (const node of activeNodes) {
+    try {
+      node.stop();
+      node.disconnect();
+    } catch {
+      /* already stopped */
+    }
+  }
+  activeNodes.clear();
   try {
     if (typeof navigator !== "undefined" && navigator.vibrate) {
       navigator.vibrate(0);
