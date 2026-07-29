@@ -42,12 +42,14 @@ function main() {
 
   // Timing ranges must be sensible
   assert(
-    WELCOME_PUSH_CONFIG.launchDelayMaxMs > WELCOME_PUSH_CONFIG.launchDelayMinMs,
-    "Launch delay range invalid",
+    WELCOME_PUSH_CONFIG.launchDelayMinMs === 7_000 &&
+      WELCOME_PUSH_CONFIG.launchDelayMaxMs === 7_000,
+    "First preview must trigger after 7 seconds",
   );
   assert(
-    WELCOME_PUSH_CONFIG.repeatEveryMaxMs > WELCOME_PUSH_CONFIG.repeatEveryMinMs,
-    "Repeat delay range invalid",
+    WELCOME_PUSH_CONFIG.repeatEveryMinMs === 60_000 &&
+      WELCOME_PUSH_CONFIG.repeatEveryMaxMs === 60_000,
+    "Recurring previews must use a 60 second interval",
   );
   assert(
     WELCOME_PUSH_CONFIG.lowCoinThreshold === 80,
@@ -55,18 +57,8 @@ function main() {
   );
   assert(
     WELCOME_PUSH_CONFIG.postRechargeDelayMinMs === 60_000 &&
-      WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs === 120_000,
-    "Post-recharge autopush must be 1–2 minutes",
-  );
-  assert(
-    WELCOME_PUSH_CONFIG.launchDelayMinMs === 60_000 &&
-      WELCOME_PUSH_CONFIG.launchDelayMaxMs === 120_000,
-    "Launch autopush must be 1–2 minutes",
-  );
-  assert(
-    WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs >
-      WELCOME_PUSH_CONFIG.postRechargeDelayMinMs,
-    "Post-recharge delay range invalid",
+      WELCOME_PUSH_CONFIG.postRechargeDelayMaxMs === 60_000,
+    "Fallback repeat interval must be 60 seconds",
   );
 
   console.log(
