@@ -29,7 +29,7 @@ function normalizeGift(raw: Record<string, unknown>): Gift | null {
 
 export async function fetchGiftCatalog(): Promise<Gift[]> {
   try {
-    const res = await fetch(`${requireApiBase()}/gifts/catalog`, {
+    const res = await fetch(`${requireApiBase()}/gifts`, {
       cache: "no-store",
     });
     if (!res.ok) return gifts;

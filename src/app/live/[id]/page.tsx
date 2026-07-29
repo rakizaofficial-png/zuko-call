@@ -70,6 +70,7 @@ import {
 } from "@/lib/livePrivateCall";
 import { startRingingTone, stopRingingTone } from "@/lib/ringingTone";
 import { useChatKeyboard } from "@/hooks/useChatKeyboard";
+import { useGiftAnimationQueue } from "@/components/gifts/GiftAnimationQueue";
 
 export default function HostOnlyLiveRoomPage({
   params,
@@ -78,6 +79,7 @@ export default function HostOnlyLiveRoomPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { enqueueGiftAnimation } = useGiftAnimationQueue();
   const searchParams = useSearchParams();
   const forceLock =
     searchParams.get("locked") === "1" ||
@@ -421,6 +423,13 @@ export default function HostOnlyLiveRoomPage({
           r ? { ...r, giftCoins: r.giftCoins + Number(p.coins || 0) } : r,
         );
         const emoji = p.giftEmoji || "🎁";
+        enqueueGiftAnimation({
+          id: `${p.fromUserId}:${p.giftId}:${p.coins}:${Date.now()}`,
+          giftId: p.giftId,
+          name: p.giftName || p.label || "Gift",
+          emoji,
+          coins: Number(p.coins || 0),
+        });
         const fid = `${Date.now()}-${Math.random()}`;
         setFloating((f) => [...f.slice(-8), { id: fid, emoji }]);
         setTimeout(
@@ -464,7 +473,16 @@ export default function HostOnlyLiveRoomPage({
       offRt();
       clearInterval(poll);
     };
-  }, [room?.id, room?.hostId, status, userId, userName, avatarUrl, checkAndApplyAccess]);
+  }, [
+    room?.id,
+    room?.hostId,
+    status,
+    userId,
+    userName,
+    avatarUrl,
+    checkAndApplyAccess,
+    enqueueGiftAnimation,
+  ]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });

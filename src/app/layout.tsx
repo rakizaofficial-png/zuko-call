@@ -10,6 +10,7 @@ import { ChatUnreadWatcher } from "@/components/ChatUnreadWatcher";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { PushBootstrap } from "@/components/PushBootstrap";
 import { AndroidBackBridge } from "@/components/AndroidBackBridge";
+import { GiftAnimationQueueProvider } from "@/components/gifts/GiftAnimationQueue";
 import "./globals.css";
 
 const syne = Syne({
@@ -48,18 +49,20 @@ export default function RootLayout({
     <html lang="en" className={`${syne.variable} ${manrope.variable} h-full`}>
       <body className="app-atmosphere app-grain min-h-full antialiased">
         <AppProvider>
-          <div className="phone-shell safe-bottom relative max-w-[min(100vw,430px)] overflow-x-hidden">
-            <DiamondEntranceBlast />
-            <CoinBurstHost />
-            <OfflineBanner />
-            {children}
-            <BottomNav />
-            <ToastHost />
-            <WelcomePushEngine />
-            <ChatUnreadWatcher />
-            <PushBootstrap />
-            <AndroidBackBridge />
-          </div>
+          <GiftAnimationQueueProvider>
+            <div className="phone-shell safe-bottom relative max-w-[min(100vw,430px)] overflow-x-hidden">
+              <DiamondEntranceBlast />
+              <CoinBurstHost />
+              <OfflineBanner />
+              {children}
+              <BottomNav />
+              <ToastHost />
+              <WelcomePushEngine />
+              <ChatUnreadWatcher />
+              <PushBootstrap />
+              <AndroidBackBridge />
+            </div>
+          </GiftAnimationQueueProvider>
         </AppProvider>
       </body>
     </html>
