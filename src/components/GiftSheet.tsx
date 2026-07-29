@@ -18,6 +18,7 @@ import {
   markTxFailed,
   recordPendingTx,
 } from "@/lib/coinLedger";
+import { useGiftAnimationQueue } from "@/components/gifts/GiftAnimationQueue";
 
 function isCinematic(g: Gift) {
   return (
@@ -64,7 +65,7 @@ export function GiftSheet({
   const { spend, syncWallet, pushToast, displayName, userId, coins, openTopUp } =
     useApp();
   const [sending, setSending] = useState<string | null>(null);
-  const [cinematic, setCinematic] = useState<Gift | null>(null);
+  const { enqueueGiftAnimation } = useGiftAnimationQueue();
   const [busy, setBusy] = useState(false);
   const [catalog, setCatalog] = useState<Gift[]>(gifts);
   const [tab, setTab] = useState<"popular" | "luxury">("popular");
@@ -167,12 +168,16 @@ export function GiftSheet({
       playGiftChime(g.coins);
       onSent?.(g.emoji, g);
       if (isCinematic(g)) {
-        setCinematic(g);
+        enqueueGiftAnimation({
+          giftId: g.id,
+          name: g.name,
+          emoji: g.emoji,
+          coins: g.coins,
+        });
         setTimeout(() => {
-          setCinematic(null);
           onClose();
           setBusy(false);
-        }, 2200);
+        }, 350);
       } else {
         setSending(g.emoji);
         setTimeout(() => {
@@ -335,36 +340,6 @@ export function GiftSheet({
               </div>
             ) : null}
           </motion.div>
-
-          <AnimatePresence>
-            {cinematic ? (
-              <motion.div
-                className="pointer-events-none fixed inset-0 z-[95] flex items-end justify-center bg-black/35 pb-[min(58dvh,460px)]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <motion.div
-                  className="mb-4 flex flex-col items-center gap-2"
-                  initial={{ scale: 0.5, opacity: 0, y: 30 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 1.1, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 260, damping: 18 }}
-                >
-                  <motion.span
-                    className="text-7xl drop-shadow-[0_0_28px_rgba(255,80,120,0.75)]"
-                    animate={{ scale: [1, 1.12, 1], rotate: [0, -5, 5, 0] }}
-                    transition={{ duration: 1.2 }}
-                  >
-                    {cinematic.emoji}
-                  </motion.span>
-                  <p className="rounded-full border border-white/20 bg-black/55 px-3 py-1 font-display text-sm font-extrabold text-white backdrop-blur-md">
-                    {cinematic.name} · {cinematic.coins}
-                  </p>
-                </motion.div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
         </>
       )}
     </AnimatePresence>
