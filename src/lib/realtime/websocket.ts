@@ -64,6 +64,18 @@ export type RealtimeEvent =
       payload: Record<string, unknown>;
     }
   | {
+      type: "live:lock";
+      payload: {
+        id?: string;
+        roomId?: string;
+        hostId?: string;
+        channel?: string;
+        entryLocked: boolean;
+        entryFee: number;
+        updatedAt?: number;
+      };
+    }
+  | {
       type: "live:ended";
       payload: { id: string };
     }
