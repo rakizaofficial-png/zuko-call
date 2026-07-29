@@ -9,9 +9,6 @@ import {
   type WelcomePushPhase,
 } from "@/lib/welcomePush/config";
 import {
-  nextLaunchDelayMs,
-  nextPostRechargeDelayMs,
-  nextRepeatDelayMs,
   nextRingDurationMs,
   pickNextWelcomeCaller,
 } from "@/lib/welcomePush/rotation";
@@ -21,6 +18,13 @@ import {
 } from "@/lib/welcomePush/ringtone";
 import { pickRandomStatusLine } from "@/lib/welcomePush/uiCopy";
 import { useApp } from "@/lib/store";
+import { heartbeatAutoCall } from "@/lib/autoCallApi";
+
+const FIRST_PREVIEW_DELAY_MS = 7_000;
+const SECOND_PREVIEW_DELAY_MS = 40_000;
+const REPEAT_PREVIEW_DELAY_MS = 60_000;
+const PREVIEW_STOP_BALANCE = 80;
+const PREVIEW_DISABLED_KEY = "zuko_auto_preview_disabled_v1";
 
 /**
  * Lifecycle:
@@ -37,7 +41,9 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   const router = useRouter();
   const { coins, ready } = useApp();
   const coinsRef = useRef(coins);
-  coinsRef.current = coins;
+  useEffect(() => {
+    coinsRef.current = coins;
+  }, [coins]);
 
   const [phase, setPhase] = useState<WelcomePushPhase>("IDLE");
   const [host, setHost] = useState<WelcomePushHost>(WELCOME_PUSH_HOST);
@@ -51,9 +57,17 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   const offerTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const ringTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const repeatTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const idleSinceRef = useRef<number>(Date.now());
   const phaseRef = useRef<WelcomePushPhase>("IDLE");
   const pickingRef = useRef(false);
+  const shownCountRef = useRef(0);
+  const acceptedStopRef = useRef(false);
+  const permanentlyDisabledRef = useRef(false);
+
+  useEffect(() => {
+    permanentlyDisabledRef.current =
+      typeof window !== "undefined" &&
+      localStorage.getItem(PREVIEW_DISABLED_KEY) === "1";
+  }, []);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -76,22 +90,22 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       clearTimeout(ringTimer.current);
       ringTimer.current = null;
     }
+    if (repeatTimer.current) {
+      clearTimeout(repeatTimer.current);
+      repeatTimer.current = null;
+    }
     stopWelcomeRingTone();
   }, []);
 
   const triggerIncoming = useCallback(async () => {
     if (!opts.enabled) return;
+    if (acceptedStopRef.current || permanentlyDisabledRef.current) return;
     if (typeof document !== "undefined" && document.hidden) {
-      // Defer while tab hidden — reschedule shortly
-      if (repeatTimer.current) clearTimeout(repeatTimer.current);
-      repeatTimer.current = setTimeout(() => {
-        void triggerIncoming();
-      }, nextRepeatDelayMs());
       return;
     }
     if (phaseRef.current !== "IDLE" && phaseRef.current !== "DONE") return;
     // Autopush when balance is low (≤ threshold) — not only when fully empty.
-    if (coinsRef.current > WELCOME_PUSH_CONFIG.lowCoinThreshold) return;
+    if (coinsRef.current >= PREVIEW_STOP_BALANCE) return;
     if (pickingRef.current) return;
     pickingRef.current = true;
     try {
@@ -113,6 +127,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       setHost(next);
       setStatusLine(pickRandomStatusLine());
       setPhase("INCOMING_CALL");
+      shownCountRef.current += 1;
       startWelcomeRingTone();
     } catch {
       /* stay idle; will retry on next schedule */
@@ -124,7 +139,6 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   const scheduleNext = useCallback(
     (delayMs: number) => {
       if (repeatTimer.current) clearTimeout(repeatTimer.current);
-      idleSinceRef.current = Date.now();
       repeatTimer.current = setTimeout(() => {
         void triggerIncoming();
       }, delayMs);
@@ -132,40 +146,20 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     [triggerIncoming],
   );
 
-  // Soft inactivity: user activity while IDLE pushes the next ring out
-  // so calls feel unexpected after quiet browsing, not mid-tap spam.
   useEffect(() => {
     if (!opts.enabled) return;
-    const bump = () => {
-      if (phaseRef.current !== "IDLE" && phaseRef.current !== "DONE") return;
-      const elapsed = Date.now() - idleSinceRef.current;
-      // Only reschedule if we're already past half the window (active browsing)
-      if (elapsed < 20_000) return;
-      idleSinceRef.current = Date.now();
-      scheduleNext(nextRepeatDelayMs());
-    };
-    const events: (keyof WindowEventMap)[] = [
-      "pointerdown",
-      "touchstart",
-      "keydown",
-      "scroll",
-    ];
-    for (const ev of events) {
-      window.addEventListener(ev, bump, { passive: true });
-    }
-    const onVis = () => {
-      if (document.hidden) return;
-      if (phaseRef.current === "IDLE" || phaseRef.current === "DONE") {
-        scheduleNext(nextRepeatDelayMs());
+    const onVisible = () => {
+      if (
+        !document.hidden &&
+        (phaseRef.current === "IDLE" || phaseRef.current === "DONE") &&
+        !acceptedStopRef.current &&
+        !permanentlyDisabledRef.current
+      ) {
+        scheduleNext(REPEAT_PREVIEW_DELAY_MS);
       }
     };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      for (const ev of events) {
-        window.removeEventListener(ev, bump);
-      }
-      document.removeEventListener("visibilitychange", onVis);
-    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [opts.enabled, scheduleNext]);
 
   // Auto welcome-call arming.
@@ -177,23 +171,43 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     if (!opts.enabled) {
       clearTimers();
       if (repeatTimer.current) clearTimeout(repeatTimer.current);
-      setPhase("IDLE");
+      queueMicrotask(() => setPhase("IDLE"));
       return;
     }
     if (!ready) return;
-    if (coins > WELCOME_PUSH_CONFIG.lowCoinThreshold) {
-      if (repeatTimer.current) {
-        clearTimeout(repeatTimer.current);
-        repeatTimer.current = null;
-      }
+    if (coins >= PREVIEW_STOP_BALANCE) {
+      permanentlyDisabledRef.current = true;
+      localStorage.setItem(PREVIEW_DISABLED_KEY, "1");
+      clearTimers();
+      queueMicrotask(() => setPhase("IDLE"));
       return;
     }
-    scheduleNext(nextLaunchDelayMs());
+    if (permanentlyDisabledRef.current || acceptedStopRef.current) return;
+    scheduleNext(
+      shownCountRef.current === 0
+        ? FIRST_PREVIEW_DELAY_MS
+        : shownCountRef.current === 1
+          ? SECOND_PREVIEW_DELAY_MS
+          : REPEAT_PREVIEW_DELAY_MS,
+    );
     return () => {
       clearTimers();
       if (repeatTimer.current) clearTimeout(repeatTimer.current);
     };
   }, [opts.enabled, ready, coins, clearTimers, scheduleNext]);
+
+  useEffect(() => {
+    if (!opts.enabled || !ready) return;
+    const sendHeartbeat = () => {
+      void heartbeatAutoCall({
+        coinBalance: coinsRef.current,
+        inCall: phaseRef.current === "TEASER_PLAYING",
+      }).catch(() => undefined);
+    };
+    sendHeartbeat();
+    const timer = window.setInterval(sendHeartbeat, 25_000);
+    return () => window.clearInterval(timer);
+  }, [opts.enabled, ready, coins]);
 
   // Ringtone + auto-dismiss
   useEffect(() => {
@@ -210,7 +224,11 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     ringTimer.current = setTimeout(() => {
       stopWelcomeRingTone();
       setPhase("IDLE");
-      scheduleNext(nextRepeatDelayMs());
+      scheduleNext(
+        shownCountRef.current <= 1
+          ? SECOND_PREVIEW_DELAY_MS
+          : REPEAT_PREVIEW_DELAY_MS,
+      );
     }, ringMs);
     return () => {
       stopWelcomeRingTone();
@@ -224,7 +242,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   // Paywall FOMO countdown — expire = call cut
   useEffect(() => {
     if (phase !== "PAYWALL_BOOST") return;
-    setOfferLeft(WELCOME_PUSH_CONFIG.offerSeconds);
+    queueMicrotask(() => setOfferLeft(WELCOME_PUSH_CONFIG.offerSeconds));
     offerTimer.current = setInterval(() => {
       setOfferLeft((s) => {
         if (s <= 1) {
@@ -233,7 +251,6 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
           queueMicrotask(() => {
             clearTimers();
             setPhase("IDLE");
-            scheduleNext(nextPostRechargeDelayMs());
           });
           return 0;
         }
@@ -243,7 +260,7 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     return () => {
       if (offerTimer.current) clearInterval(offerTimer.current);
     };
-  }, [phase, clearTimers, scheduleNext]);
+  }, [phase, clearTimers]);
 
   // Preview countdown — driven by video duration when known; fallback tick only
   useEffect(() => {
@@ -255,7 +272,9 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
       return;
     }
     // Seed with fallback until the player reports real clip length
-    setPreviewLeft(Math.round(WELCOME_PUSH_CONFIG.teaserCutMs / 1000));
+    queueMicrotask(() =>
+      setPreviewLeft(Math.round(WELCOME_PUSH_CONFIG.teaserCutMs / 1000)),
+    );
     previewTick.current = setInterval(() => {
       setPreviewLeft((s) => Math.max(0, s - 1));
     }, 1000);
@@ -272,10 +291,15 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   const rejectIncoming = useCallback(() => {
     stopWelcomeRingTone();
     setPhase("IDLE");
-    scheduleNext(nextRepeatDelayMs());
+    scheduleNext(
+      shownCountRef.current <= 1
+        ? SECOND_PREVIEW_DELAY_MS
+        : REPEAT_PREVIEW_DELAY_MS,
+    );
   }, [scheduleNext]);
 
   const acceptIncoming = useCallback(() => {
+    acceptedStopRef.current = true;
     stopWelcomeRingTone();
     if (ringTimer.current) {
       clearTimeout(ringTimer.current);
@@ -284,12 +308,23 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
     // Real online hosts: navigate to Agora bridge immediately (no spinner / freeze)
     if (host.source === "live" && host.host_id) {
       clearTimers();
+      void heartbeatAutoCall({
+        coinBalance: coinsRef.current,
+        inCall: true,
+        acceptedCall: true,
+      }).catch(() => undefined);
       setPhase("IDLE");
       router.push(`/call/${encodeURIComponent(host.host_id)}?live=1`);
       return;
     }
     // Demo / simulated hosts: play preview clip once → recharge when it ends
     setPhase("TEASER_PLAYING");
+    clearTimers();
+    void heartbeatAutoCall({
+      coinBalance: coinsRef.current,
+      inCall: true,
+      acceptedCall: true,
+    }).catch(() => undefined);
     // Wide safety net until player reports real duration (or if no video)
     if (teaserTimer.current) clearTimeout(teaserTimer.current);
     teaserTimer.current = setTimeout(() => {
@@ -298,11 +333,10 @@ export function useWelcomePushCall(opts: { enabled: boolean }) {
   }, [clearTimers, host.host_id, host.source, router]);
 
   const closePaywall = useCallback(() => {
-    // Dismiss without recharge ("Recharge later") → cut call; next in 1–2 min
+    // Accepted calls stop the auto-preview sequence for this app session.
     clearTimers();
     setPhase("IDLE");
-    scheduleNext(nextPostRechargeDelayMs());
-  }, [clearTimers, scheduleNext]);
+  }, [clearTimers]);
 
   /** Video finished (or failed) → cut call + open recharge */
   const hardDisconnectTeaser = useCallback(() => {

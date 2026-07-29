@@ -28,6 +28,8 @@ export type AutoCallStatus = {
   maxPerHour: number;
   nextInviteAt: number | null;
   pending: AutoCallInvite | null;
+  autoInviteCount?: number;
+  stopBalance?: number;
 };
 
 async function autoCallFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -77,6 +79,7 @@ export async function heartbeatAutoCall(input: {
   recentHostIds?: string[];
   viewingHostId?: string | null;
   inCall?: boolean;
+  acceptedCall?: boolean;
 }): Promise<{ status: AutoCallStatus; pending: AutoCallInvite | null }> {
   const userId = ensureDeviceUserId();
   return autoCallFetch("/auto-call/heartbeat", {

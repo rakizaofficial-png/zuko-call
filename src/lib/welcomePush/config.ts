@@ -77,16 +77,16 @@ export const WELCOME_PUSH_CONFIG = {
   /**
    * First lure after 1–2 minutes when wallet is low / empty.
    */
-  launchDelayMinMs: 60_000,
-  launchDelayMaxMs: 120_000,
+  launchDelayMinMs: 7_000,
+  launchDelayMaxMs: 7_000,
   /** Recurring lure while browsing low-coin (1–2 min between rings) */
   repeatEveryMinMs: 60_000,
-  repeatEveryMaxMs: 120_000,
+  repeatEveryMaxMs: 60_000,
   /**
    * After recharge paywall dismiss / "Recharge later" — next autopush in 1–2 min.
    */
   postRechargeDelayMinMs: 60_000,
-  postRechargeDelayMaxMs: 120_000,
+  postRechargeDelayMaxMs: 60_000,
   /**
    * Autopush when coins are at or below this (low balance), not only zero.
    * Matches ~1 minute call rate so broke/near-broke users get lured.
@@ -105,5 +105,5 @@ export const WELCOME_PUSH_CONFIG = {
   hostCooldownCount: 10,
   messageCooldownCount: 14,
   /** Bump when media / timing rules change */
-  storageKey: "luma_welcome_push_v14_lowcoin_1to2m",
+  storageKey: "luma_welcome_push_v15_interval_preview",
 } as const;
