@@ -144,7 +144,12 @@ export function GiftAnimationQueueProvider({
   } | null>(null);
   const lottieRef = useRef<LottieRefCurrentProps>(null);
   const soundRef = useRef<HTMLAudioElement | null>(null);
+  const finishingRef = useRef<string | null>(null);
   const active = queue[0] ?? null;
+  const activeIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeIdRef.current = active?.id || null;
+  }, [active?.id]);
   const animationData =
     typeof active?.source === "string"
       ? remoteAnimation?.url === active.source
@@ -165,13 +170,22 @@ export function GiftAnimationQueueProvider({
   }, []);
 
   const dismiss = useCallback(() => {
+    const activeId = activeIdRef.current;
+    if (!activeId || finishingRef.current === activeId) return;
+    finishingRef.current = activeId;
     if (soundRef.current) {
       soundRef.current.pause();
       soundRef.current.currentTime = 0;
       soundRef.current.src = "";
       soundRef.current = null;
     }
-    setQueue((current) => current.slice(1));
+    setQueue((current) => {
+      const next = current[0]?.id === activeId ? current.slice(1) : current;
+      queueMicrotask(() => {
+        if (finishingRef.current === activeId) finishingRef.current = null;
+      });
+      return next;
+    });
   }, []);
 
   useEffect(() => {
