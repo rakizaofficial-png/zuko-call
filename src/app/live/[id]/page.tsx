@@ -137,10 +137,6 @@ export default function HostOnlyLiveRoomPage({
 
   const checkAndApplyAccess = useCallback(
     async (roomId: string) => {
-      if (hasUnlockedLive(roomId, userId)) {
-        setUnlocked(true);
-        return true;
-      }
       try {
         const access = await checkLiveRoomAccess(roomId, userId);
         if (access.entryFee) {
@@ -155,10 +151,8 @@ export default function HostOnlyLiveRoomPage({
           return true;
         }
       } catch {
-        if (hasUnlockedLive(roomId, userId)) {
-          setUnlocked(true);
-          return true;
-        }
+        // Server is authoritative. A stale local unlock must never bypass a
+        // runtime lock or allow Agora subscription without paid access.
       }
       setUnlocked(false);
       return false;
@@ -380,6 +374,32 @@ export default function HostOnlyLiveRoomPage({
         );
         if (lock.locked) {
           setUnlocked(hasUnlockedLive(room.id, userId));
+          void checkAndApplyAccess(room.id);
+        } else {
+          setUnlocked(true);
+        }
+      }
+      if (ev.type === "live:lock") {
+        const p = ev.payload;
+        const rid = String(p.roomId || p.id || "");
+        if (rid && rid !== room.id && rid !== `live_${room.hostId}`) return;
+        if (p.hostId && p.hostId !== room.hostId) return;
+        const lock = parseRoomLocked(p as unknown as Record<string, unknown>);
+        setRoom((current) =>
+          current
+            ? {
+                ...current,
+                locked: lock.locked,
+                unlockCoins: lock.unlockCoins,
+                mode: lock.locked ? "premium" : current.mode,
+              }
+            : current,
+        );
+        if (lock.locked) {
+          // Hide/leave RTC immediately, then verify paid access with Backend.
+          setUnlocked(false);
+          setStreamReady(false);
+          void stopUserAgoraLiveViewer();
           void checkAndApplyAccess(room.id);
         } else {
           setUnlocked(true);
@@ -1241,9 +1261,8 @@ export default function HostOnlyLiveRoomPage({
               1400,
             );
             if (gift) playGiftChime(gift.coins);
-            if (room.locked && gift && giftMeetsUnlock(gift.coins, unlockCoins)) {
-              applyUnlock(gift);
-            }
+            // Entry access is only granted by /live/rooms/:id/join. Sending a
+            // gift must not locally bypass the server-authoritative room lock.
           }}
         />
       )}
