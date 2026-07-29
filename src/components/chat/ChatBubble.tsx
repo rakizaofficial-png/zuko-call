@@ -55,6 +55,24 @@ export function ChatBubble({
           </div>
         ) : null}
         <div className={`relative px-3 py-2 shadow-sm ${bubbleClass}`}>
+          {message.kind === "gift" ? (
+            <div className="mb-1 flex min-w-[210px] items-center gap-3 rounded-xl border border-amber-300/35 bg-amber-300/10 p-2.5">
+              <span className="text-4xl" aria-hidden>
+                {message.giftEmoji || "🎁"}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold text-amber-200">
+                  {fromMe ? "You sent a gift" : "Gift received"}
+                </p>
+                <p className="truncate text-sm font-extrabold text-white">
+                  {message.giftName || "Gift"}
+                </p>
+                <p className="text-xs font-bold text-amber-200">
+                  {(message.giftCoins || 0).toLocaleString()} coins
+                </p>
+              </div>
+            </div>
+          ) : null}
           {message.imageUrl ? (
             <button
               type="button"
@@ -69,7 +87,7 @@ export function ChatBubble({
               />
             </button>
           ) : null}
-          {message.text ? (
+          {message.text && message.kind !== "gift" ? (
             <p className="whitespace-pre-wrap break-words text-[14.5px] leading-[1.35]">
               {message.text}
             </p>
