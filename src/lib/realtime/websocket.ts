@@ -35,6 +35,8 @@ export type RealtimeEvent =
         giftEmoji?: string;
         coins: number;
         label?: string;
+        animationUrl?: string;
+        soundUrl?: string;
       };
     }
   | {

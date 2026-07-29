@@ -50,6 +50,9 @@ export type Gift = {
     | "vip"
     | "legendary";
   adult?: boolean;
+  category?: "popular" | "vip" | "mega";
+  animationUrl?: string;
+  soundUrl?: string;
 };
 
 export type CoinPack = {
@@ -244,6 +247,20 @@ export const gifts: Gift[] = [
 ].map((gift) => ({
   ...gift,
   tier: giftTierByCoins(gift.coins),
+  category:
+    gift.coins >= 1200 ? "mega" : gift.coins >= 250 ? "vip" : "popular",
+  animationUrl:
+    gift.coins >= 1200
+      ? "https://assets7.lottiefiles.com/packages/lf20_touohxv0.json"
+      : gift.coins >= 250
+        ? "https://assets2.lottiefiles.com/packages/lf20_u4yrau.json"
+        : "https://assets10.lottiefiles.com/packages/lf20_q5pk6p1k.json",
+  soundUrl:
+    gift.coins >= 1200
+      ? "https://actions.google.com/sounds/v1/transportation/sports_car_accelerating.ogg"
+      : gift.coins >= 250
+        ? "https://actions.google.com/sounds/v1/cartoon/magic_chime.ogg"
+        : "https://actions.google.com/sounds/v1/cartoon/pop.ogg",
 }));
 
 export const giftTickerLines = [

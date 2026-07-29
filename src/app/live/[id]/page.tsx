@@ -429,6 +429,8 @@ export default function HostOnlyLiveRoomPage({
           name: p.giftName || p.label || "Gift",
           emoji,
           coins: Number(p.coins || 0),
+          source: p.animationUrl,
+          soundUrl: p.soundUrl,
         });
         const fid = `${Date.now()}-${Math.random()}`;
         setFloating((f) => [...f.slice(-8), { id: fid, emoji }]);

@@ -24,6 +24,17 @@ function normalizeGift(raw: Record<string, unknown>): Gift | null {
       typeof raw.tier === "string"
         ? (raw.tier as Gift["tier"])
         : giftTierByCoins(coins),
+    category:
+      raw.category === "vip" || raw.category === "mega"
+        ? raw.category
+        : coins >= 1200
+          ? "mega"
+          : coins >= 250
+            ? "vip"
+            : "popular",
+    animationUrl:
+      typeof raw.animationUrl === "string" ? raw.animationUrl : undefined,
+    soundUrl: typeof raw.soundUrl === "string" ? raw.soundUrl : undefined,
   };
 }
 
