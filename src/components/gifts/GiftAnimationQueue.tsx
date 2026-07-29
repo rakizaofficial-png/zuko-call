@@ -22,6 +22,7 @@ export type GiftAnimation = {
   emoji?: string;
   coins?: number;
   source?: string | LottieData;
+  soundUrl?: string;
 };
 
 type GiftAnimationContextValue = {
@@ -142,6 +143,7 @@ export function GiftAnimationQueueProvider({
     data: LottieData;
   } | null>(null);
   const lottieRef = useRef<LottieRefCurrentProps>(null);
+  const soundRef = useRef<HTMLAudioElement | null>(null);
   const active = queue[0] ?? null;
   const animationData =
     typeof active?.source === "string"
@@ -163,6 +165,12 @@ export function GiftAnimationQueueProvider({
   }, []);
 
   const dismiss = useCallback(() => {
+    if (soundRef.current) {
+      soundRef.current.pause();
+      soundRef.current.currentTime = 0;
+      soundRef.current.src = "";
+      soundRef.current = null;
+    }
     setQueue((current) => current.slice(1));
   }, []);
 
@@ -197,6 +205,23 @@ export function GiftAnimationQueueProvider({
     const safetyTimer = window.setTimeout(dismiss, 8000);
     return () => window.clearTimeout(safetyTimer);
   }, [active, dismiss]);
+
+  useEffect(() => {
+    if (!active || !animationData || !active.soundUrl) return;
+    const sound = new Audio(active.soundUrl);
+    sound.preload = "auto";
+    sound.volume = 0.78;
+    soundRef.current = sound;
+    void sound.play().catch(() => {
+      // Mobile browsers can reject autoplay; the gift send tap normally unlocks it.
+    });
+    return () => {
+      sound.pause();
+      sound.currentTime = 0;
+      sound.src = "";
+      if (soundRef.current === sound) soundRef.current = null;
+    };
+  }, [active, animationData]);
 
   const value = useMemo(
     () => ({ enqueueGiftAnimation }),

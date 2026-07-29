@@ -68,7 +68,7 @@ export function GiftSheet({
   const { enqueueGiftAnimation } = useGiftAnimationQueue();
   const [busy, setBusy] = useState(false);
   const [catalog, setCatalog] = useState<Gift[]>(gifts);
-  const [tab, setTab] = useState<"popular" | "luxury">("popular");
+  const [tab, setTab] = useState<"popular" | "vip" | "mega">("popular");
 
   useEffect(() => {
     if (!open) return;
@@ -86,9 +86,10 @@ export function GiftSheet({
     return pushSheetCloser(onClose);
   }, [open, onClose]);
 
-  const basic = catalog.filter((g) => !isCinematic(g));
-  const adult = catalog.filter((g) => isCinematic(g));
-  const shown = tab === "popular" ? basic : adult;
+  const categoryFor = (gift: Gift) =>
+    gift.category ||
+    (gift.coins >= 1200 ? "mega" : gift.coins >= 250 ? "vip" : "popular");
+  const shown = catalog.filter((gift) => categoryFor(gift) === tab);
 
   const send = async (g: Gift) => {
     if (busy) return;
@@ -173,6 +174,8 @@ export function GiftSheet({
           name: g.name,
           emoji: g.emoji,
           coins: g.coins,
+          source: g.animationUrl,
+          soundUrl: g.soundUrl,
         });
         setTimeout(() => {
           onClose();
@@ -260,7 +263,8 @@ export function GiftSheet({
               {(
                 [
                   ["popular", "Popular"],
-                  ["luxury", "Luxury"],
+                  ["vip", "VIP"],
+                  ["mega", "Mega/Adult"],
                 ] as const
               ).map(([key, label]) => (
                 <button
@@ -279,7 +283,7 @@ export function GiftSheet({
                     />
                   ) : null}
                   <span className="relative z-[1] inline-flex items-center justify-center gap-1">
-                    {key === "luxury" ? <Sparkles className="h-3 w-3" /> : null}
+                    {key !== "popular" ? <Sparkles className="h-3 w-3" /> : null}
                     {label}
                   </span>
                 </button>
@@ -304,7 +308,7 @@ export function GiftSheet({
                       className={`relative flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2 disabled:opacity-50 ${
                         unlockOk
                           ? "border-amber-300/55 bg-amber-400/15"
-                          : tab === "luxury"
+                          : tab !== "popular"
                             ? "border-rose-400/35 bg-gradient-to-b from-rose-500/20 to-white/5"
                             : "border-white/10 bg-white/[0.06]"
                       }`}
