@@ -19,6 +19,14 @@ export type DmMessage = {
   fromId?: string;
   /** Durable public image URL shared by both participants */
   imageUrl?: string;
+  kind?: "text" | "image" | "gift";
+  giftId?: string;
+  giftName?: string;
+  giftEmoji?: string;
+  giftCoins?: number;
+  giftAnimationUrl?: string;
+  giftSoundUrl?: string;
+  giftTxnId?: string;
   read?: boolean;
 };
 
@@ -172,6 +180,14 @@ export async function syncDmFromApi(hostId: string): Promise<DmMessage[]> {
         text: string;
         createdAt: number;
         imageUrl?: string;
+        kind?: DmMessage["kind"];
+        giftId?: string;
+        giftName?: string;
+        giftEmoji?: string;
+        giftCoins?: number;
+        giftAnimationUrl?: string;
+        giftSoundUrl?: string;
+        giftTxnId?: string;
       }>;
     };
     const mapped: DmMessage[] = (data.messages || []).map((m) => ({
@@ -181,6 +197,14 @@ export async function syncDmFromApi(hostId: string): Promise<DmMessage[]> {
       at: m.createdAt,
       fromId: m.fromId,
       imageUrl: m.imageUrl,
+      kind: m.kind,
+      giftId: m.giftId,
+      giftName: m.giftName,
+      giftEmoji: m.giftEmoji,
+      giftCoins: m.giftCoins,
+      giftAnimationUrl: m.giftAnimationUrl,
+      giftSoundUrl: m.giftSoundUrl,
+      giftTxnId: m.giftTxnId,
     }));
     mapped.sort((a, b) => a.at - b.at);
     if (mapped.length) cacheMessages(threadId, mapped);
@@ -379,7 +403,26 @@ export function listenDmRealtime(
   rt.connect();
   return rt.subscribe((ev) => {
     if ((ev as { type: string }).type !== "dm:message") return;
-    const p = (ev as { payload?: { message?: { id: string; fromId: string; toId: string; text: string; createdAt: number; imageUrl?: string } } }).payload;
+    const p = (ev as {
+      payload?: {
+        message?: {
+          id: string;
+          fromId: string;
+          toId: string;
+          text: string;
+          createdAt: number;
+          imageUrl?: string;
+          kind?: DmMessage["kind"];
+          giftId?: string;
+          giftName?: string;
+          giftEmoji?: string;
+          giftCoins?: number;
+          giftAnimationUrl?: string;
+          giftSoundUrl?: string;
+          giftTxnId?: string;
+        };
+      };
+    }).payload;
     const m = p?.message;
     if (!m) return;
     const ids = [m.fromId, m.toId];
@@ -391,6 +434,14 @@ export function listenDmRealtime(
       at: m.createdAt,
       fromId: m.fromId,
       imageUrl: m.imageUrl,
+      kind: m.kind,
+      giftId: m.giftId,
+      giftName: m.giftName,
+      giftEmoji: m.giftEmoji,
+      giftCoins: m.giftCoins,
+      giftAnimationUrl: m.giftAnimationUrl,
+      giftSoundUrl: m.giftSoundUrl,
+      giftTxnId: m.giftTxnId,
     });
   });
 }

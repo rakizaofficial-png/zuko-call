@@ -41,6 +41,10 @@ function toChatMessage(m: DmMessage): ChatMessage {
     text: m.text,
     at: m.at,
     imageUrl: m.imageUrl,
+    kind: m.kind,
+    giftName: m.giftName,
+    giftEmoji: m.giftEmoji,
+    giftCoins: m.giftCoins,
     read: m.read,
   };
 }

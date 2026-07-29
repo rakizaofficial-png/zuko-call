@@ -10,6 +10,10 @@ export type ChatMessage = {
   text: string;
   at: number;
   imageUrl?: string;
+  kind?: "text" | "image" | "gift";
+  giftName?: string;
+  giftEmoji?: string;
+  giftCoins?: number;
   /** Outbound read receipt — false = sent, true/undefined = read */
   read?: boolean;
   /** Optional sender label (support admin, system, etc.) */
