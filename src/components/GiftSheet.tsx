@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Coins, Sparkles, X } from "lucide-react";
 import { gifts, type Gift } from "@/lib/data";
@@ -8,7 +8,6 @@ import { fetchGiftCatalog } from "@/lib/giftCatalog";
 import { useApp } from "@/lib/store";
 import { getDeviceUserId } from "@/lib/walletApi";
 import { requireApiBase } from "@/config/apiConfig";
-import { getRealtimeClient } from "@/lib/realtime/websocket";
 import { playGiftChime } from "@/lib/liveGiftSound";
 import { pushSheetCloser } from "@/lib/sheetBackStack";
 import {
@@ -67,6 +66,7 @@ export function GiftSheet({
   const [sending, setSending] = useState<string | null>(null);
   const { enqueueGiftAnimation } = useGiftAnimationQueue();
   const [busy, setBusy] = useState(false);
+  const sendLockRef = useRef(false);
   const [catalog, setCatalog] = useState<Gift[]>(gifts);
   const [tab, setTab] = useState<"popular" | "vip" | "mega">("popular");
 
@@ -92,7 +92,7 @@ export function GiftSheet({
   const shown = catalog.filter((gift) => categoryFor(gift) === tab);
 
   const send = async (g: Gift) => {
-    if (busy) return;
+    if (busy || sendLockRef.current) return;
     const me = getDeviceUserId() || userId;
     if (hostId && me && me === hostId) {
       pushToast?.("Hosts cannot gift themselves!");
@@ -103,9 +103,11 @@ export function GiftSheet({
       openTopUp?.(g.coins);
       return;
     }
+    sendLockRef.current = true;
     setBusy(true);
     const txId = giftTxId(g.id, hostId || "none");
     if (hasCompletedTx(txId)) {
+      sendLockRef.current = false;
       setBusy(false);
       onClose();
       return;
@@ -127,6 +129,7 @@ export function GiftSheet({
           headers: {
             "Content-Type": "application/json",
             "X-User-Id": me,
+            "Idempotency-Key": txId,
           },
           body: JSON.stringify({
             userId: me,
@@ -136,6 +139,7 @@ export function GiftSheet({
             roomId,
             callId,
             clientTxId: txId,
+            txnKey: txId,
           }),
         });
         const data = await res.json();
@@ -147,21 +151,11 @@ export function GiftSheet({
           throw new Error(data.error || "Gift failed");
         }
         markTxCompleted(txId, {
-          serverId: data.transactionId,
+          serverId: data.txn?.id || data.transactionId,
         });
         await syncWallet?.();
-        try {
-          getRealtimeClient(me).sendGift({
-            roomId,
-            toHostId: hostId,
-            giftId: g.id,
-            coins: g.coins,
-            label: g.name,
-          });
-        } catch {
-          /* optional WS mirror */
-        }
       } else if (!spend(g.coins, `Sent ${g.name} ${g.emoji}`)) {
+        sendLockRef.current = false;
         setBusy(false);
         return;
       }
@@ -179,6 +173,7 @@ export function GiftSheet({
         });
         setTimeout(() => {
           onClose();
+          sendLockRef.current = false;
           setBusy(false);
         }, 350);
       } else {
@@ -186,11 +181,13 @@ export function GiftSheet({
         setTimeout(() => {
           setSending(null);
           onClose();
+          sendLockRef.current = false;
           setBusy(false);
         }, 650);
       }
     } catch (e) {
       pushToast?.(e instanceof Error ? e.message : "Could not send gift");
+      sendLockRef.current = false;
       setBusy(false);
     }
   };
