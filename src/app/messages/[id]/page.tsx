@@ -30,6 +30,7 @@ import { fetchLiveHosts } from "@/lib/api";
 import { hostFromId } from "@/lib/discoverHosts";
 import { pickHostAvatarUrl } from "@/lib/hostAvatar";
 import { getDeviceUserId } from "@/lib/walletApi";
+import { requireApiBase } from "@/config/apiConfig";
 
 const EMOJIS = ["😀", "😍", "🔥", "💕", "😘", "✨", "🎉", "👋", "🥰", "😎"];
 
@@ -65,6 +66,7 @@ export default function ChatThreadPage({
     online: true,
   });
   const fileRef = useRef<HTMLInputElement>(null);
+  const sendLockRef = useRef(false);
   const userId = useMemo(() => getDeviceUserId(), []);
 
   useEffect(() => {
@@ -138,7 +140,8 @@ export default function ChatThreadPage({
 
   const send = async (payload?: string, imageUrl?: string) => {
     const outgoing = (payload ?? text).trim();
-    if ((!outgoing && !imageUrl) || !hostMeta.id || sending) return;
+    if ((!outgoing && !imageUrl) || !hostMeta.id || sendLockRef.current) return;
+    sendLockRef.current = true;
     if (vipTier === "diamond") triggerEntranceBlast();
     setSending(true);
     const tid = openDmWithHost({
@@ -169,6 +172,7 @@ export default function ChatThreadPage({
       if (!payload) setText(outgoing);
       pushToast?.(e instanceof Error ? e.message : "Could not send");
     } finally {
+      sendLockRef.current = false;
       setSending(false);
     }
   };
@@ -182,9 +186,32 @@ export default function ChatThreadPage({
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result || "");
-      void send("📷 Photo", dataUrl);
+    reader.onload = async () => {
+      try {
+        const upload = await fetch(`${requireApiBase()}/chat/images`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-Id": userId,
+          },
+          body: JSON.stringify({
+            ownerId: userId,
+            image: String(reader.result || ""),
+          }),
+        });
+        const data = (await upload.json().catch(() => ({}))) as {
+          imageUrl?: string;
+          error?: string;
+        };
+        if (!upload.ok || !data.imageUrl) {
+          throw new Error(data.error || "Image upload failed");
+        }
+        await send("📷 Photo", data.imageUrl);
+      } catch (error) {
+        pushToast?.(
+          error instanceof Error ? error.message : "Image upload failed",
+        );
+      }
     };
     reader.readAsDataURL(file);
   };

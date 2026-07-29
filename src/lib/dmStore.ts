@@ -17,7 +17,7 @@ export type DmMessage = {
   text: string;
   at: number;
   fromId?: string;
-  /** Local data-URL preview for image messages (not uploaded to CDN yet) */
+  /** Durable public image URL shared by both participants */
   imageUrl?: string;
   read?: boolean;
 };
@@ -171,6 +171,7 @@ export async function syncDmFromApi(hostId: string): Promise<DmMessage[]> {
         toId: string;
         text: string;
         createdAt: number;
+        imageUrl?: string;
       }>;
     };
     const mapped: DmMessage[] = (data.messages || []).map((m) => ({
@@ -179,6 +180,7 @@ export async function syncDmFromApi(hostId: string): Promise<DmMessage[]> {
       text: m.text,
       at: m.createdAt,
       fromId: m.fromId,
+      imageUrl: m.imageUrl,
     }));
     mapped.sort((a, b) => a.at - b.at);
     if (mapped.length) cacheMessages(threadId, mapped);
@@ -204,8 +206,9 @@ export async function sendDmMessage(
   const userId = getDeviceUserId();
   const hostId = meta?.hostId || threadId.replace(/^dm_/, "");
   const now = Date.now();
+  const clientMessageId = `msg_${now}_${Math.random().toString(36).slice(2, 9)}`;
   const optimistic: DmMessage = {
-    id: `local_${now}`,
+    id: clientMessageId,
     from: "me",
     text: trimmed || "📷 Photo",
     at: now,
@@ -239,6 +242,8 @@ export async function sendDmMessage(
       fromRole: "user",
       peerName: meta?.hostName || "Host",
       peerAvatar: meta?.hostAvatar,
+      imageUrl: meta?.imageUrl,
+      clientMessageId,
     }),
   });
   const data = await res.json();
@@ -249,6 +254,7 @@ export async function sendDmMessage(
     fromId: string;
     text: string;
     createdAt: number;
+    imageUrl?: string;
   };
   const mine: DmMessage = {
     id: saved.id,
@@ -256,7 +262,7 @@ export async function sendDmMessage(
     text: saved.text,
     at: saved.createdAt,
     fromId: saved.fromId,
-    imageUrl: meta?.imageUrl,
+    imageUrl: saved.imageUrl || meta?.imageUrl,
     read: true,
   };
   const withoutLocal = getDmMessages(threadId).filter((m) => m.id !== optimistic.id);
@@ -316,6 +322,7 @@ export function noteIncomingDm(
           toId: string;
           text: string;
           createdAt: number;
+          imageUrl?: string;
         };
         thread?: { hostId?: string; lastMessage?: string };
       }
@@ -351,7 +358,14 @@ export function noteIncomingDm(
   if (!msgs.some((x) => x.id === m.id)) {
     cacheMessages(threadId, [
       ...msgs,
-      { id: m.id, from: "them", text: m.text, at: now, fromId: m.fromId },
+      {
+        id: m.id,
+        from: "them",
+        text: m.text,
+        at: now,
+        fromId: m.fromId,
+        imageUrl: m.imageUrl,
+      },
     ]);
   }
 }
@@ -365,7 +379,7 @@ export function listenDmRealtime(
   rt.connect();
   return rt.subscribe((ev) => {
     if ((ev as { type: string }).type !== "dm:message") return;
-    const p = (ev as { payload?: { message?: { id: string; fromId: string; toId: string; text: string; createdAt: number } } }).payload;
+    const p = (ev as { payload?: { message?: { id: string; fromId: string; toId: string; text: string; createdAt: number; imageUrl?: string } } }).payload;
     const m = p?.message;
     if (!m) return;
     const ids = [m.fromId, m.toId];
@@ -376,6 +390,7 @@ export function listenDmRealtime(
       text: m.text,
       at: m.createdAt,
       fromId: m.fromId,
+      imageUrl: m.imageUrl,
     });
   });
 }

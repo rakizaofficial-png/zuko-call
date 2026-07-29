@@ -93,7 +93,9 @@ export function ChatShell({
           bottom: `calc(${footerH}px + var(--kb-inset, 0px))`,
         }}
       >
-        {children}
+        <div className="flex min-h-full flex-col justify-end gap-1.5">
+          {children}
+        </div>
       </div>
 
       <div
