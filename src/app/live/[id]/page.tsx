@@ -487,7 +487,9 @@ export default function HostOnlyLiveRoomPage({
           );
         }
       });
-    }, 10000);
+    // WS normally locks active viewers instantly. This short authoritative
+    // poll is the fallback for a reconnecting/backgrounded mobile WebView.
+    }, 2500);
 
     return () => {
       offChat();
