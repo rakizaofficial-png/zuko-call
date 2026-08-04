@@ -1,15 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Syne, Manrope } from "next/font/google";
 import { AppProvider } from "@/lib/store";
-import { BottomNav } from "@/components/BottomNav";
-import { ToastHost } from "@/components/ToastHost";
-import { DiamondEntranceBlast } from "@/components/DiamondEntranceBlast";
-import { WelcomePushEngine } from "@/components/welcome/WelcomePushEngine";
-import { CoinBurstHost } from "@/components/engagement/CoinBurstHost";
-import { ChatUnreadWatcher } from "@/components/ChatUnreadWatcher";
-import { OfflineBanner } from "@/components/OfflineBanner";
-import { PushBootstrap } from "@/components/PushBootstrap";
-import { AndroidBackBridge } from "@/components/AndroidBackBridge";
+import { AppShell } from "@/components/auth/AppShell";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 import { GiftAnimationQueueProvider } from "@/components/gifts/GiftAnimationQueue";
 import "./globals.css";
 
@@ -50,18 +43,9 @@ export default function RootLayout({
       <body className="app-atmosphere app-grain min-h-full antialiased">
         <AppProvider>
           <GiftAnimationQueueProvider>
-            <div className="phone-shell safe-bottom relative max-w-[min(100vw,430px)] overflow-x-hidden">
-              <DiamondEntranceBlast />
-              <CoinBurstHost />
-              <OfflineBanner />
-              {children}
-              <BottomNav />
-              <ToastHost />
-              <WelcomePushEngine />
-              <ChatUnreadWatcher />
-              <PushBootstrap />
-              <AndroidBackBridge />
-            </div>
+            <AuthGuard>
+              <AppShell>{children}</AppShell>
+            </AuthGuard>
           </GiftAnimationQueueProvider>
         </AppProvider>
       </body>

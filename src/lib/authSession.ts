@@ -1,13 +1,20 @@
 /**
- * Client auth session for Zuko Android user app.
- * Production: swap issue/verify with CoinCall JWT `/auth/*`.
- * Never trusts client for wallet minting — only identity headers + UX gate.
+ * Server-backed auth session for the Zuko user app.
+ * CoinCall owns account credentials, session tokens, wallet identity, and
+ * Google ID-token verification. The browser stores only the issued session.
  */
+
+import { apiConfig, requireApiBase } from "@/config/apiConfig";
+import {
+  getGoogleFirebaseIdToken,
+  signOutFirebaseUser,
+} from "@/lib/firebaseAuth";
 
 const SESSION_KEY = "zuko_user_session_v1";
 const USERS_KEY = "zuko_local_users_v1";
 const OTP_KEY = "zuko_otp_pending_v1";
 const BOUND_KEY = "zuko_bound_user_id_v1";
+export const AUTH_CHANGED_EVENT = "zuko:auth-changed";
 
 export type AuthUser = {
   id: string;
@@ -75,6 +82,7 @@ export function getSession(): AuthSession | null {
 export function clearSession() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(SESSION_KEY);
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
 /** Bind authenticated account to device wallet identity for API headers. */
@@ -93,13 +101,18 @@ export function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   if (session?.token) {
     headers.Authorization = `Bearer ${session.token}`;
+    headers["X-User-Id"] = session.user.id;
     headers["X-Auth-User-Id"] = session.user.id;
     headers["X-Auth-Email"] = session.user.email;
   }
   return headers;
 }
 
-function issueSession(user: AuthUser, existingRefresh?: string): AuthSession {
+function issueSession(
+  user: AuthUser,
+  existingRefresh?: string,
+  accessToken?: string,
+): AuthSession {
   const refresh =
     existingRefresh ||
     `rt_${user.id}_${Math.random().toString(36).slice(2, 12)}`;
@@ -107,14 +120,83 @@ function issueSession(user: AuthUser, existingRefresh?: string): AuthSession {
     JSON.stringify({ sub: user.id, email: user.email, iat: Date.now() }),
   );
   const session: AuthSession = {
-    token: `jwt.${payload}.zuko`,
+    token: accessToken || `jwt.${payload}.zuko`,
     refreshToken: refresh,
     user,
     expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   bindSessionToDevice(user.id);
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
   return session;
+}
+
+type AuthApiResponse = {
+  token?: unknown;
+  userId?: unknown;
+  email?: unknown;
+  displayName?: unknown;
+};
+
+async function readAuthResponse(response: Response): Promise<AuthSession> {
+  const data = (await response.json().catch(() => ({}))) as AuthApiResponse & {
+    error?: unknown;
+  };
+  if (!response.ok) {
+    throw new Error(
+      typeof data.error === "string"
+        ? data.error
+        : `Authentication failed (${response.status})`,
+    );
+  }
+  const token = String(data.token || "");
+  const userId = String(data.userId || "");
+  const email = String(data.email || "");
+  const name = String(data.displayName || email.split("@")[0] || "Zuko User");
+  if (!token || !userId || !email) {
+    throw new Error("Server returned an incomplete account session");
+  }
+  return issueSession(
+    { id: userId, email, name, createdAt: Date.now() },
+    undefined,
+    token,
+  );
+}
+
+export async function validateStoredSession(): Promise<AuthSession | null> {
+  const current = getSession();
+  if (!current) return null;
+  try {
+    const response = await fetch(`${requireApiBase()}/users/session`, {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      clearSession();
+      return null;
+    }
+    const data = (await response.json()) as AuthApiResponse;
+    const userId = String(data.userId || "");
+    if (!userId || userId !== current.user.id) {
+      clearSession();
+      return null;
+    }
+    return current;
+  } catch {
+    // A network outage must not silently grant access with an unverified token.
+    clearSession();
+    return null;
+  }
+}
+
+export async function loginWithGoogle(): Promise<AuthSession> {
+  const idToken = await getGoogleFirebaseIdToken();
+  const response = await fetch(`${requireApiBase()}/users/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+  return readAuthResponse(response);
 }
 
 function makeOtpCode(): string {
@@ -206,35 +288,16 @@ export async function registerWithPassword(input: {
   password: string;
   name: string;
 }): Promise<AuthSession> {
-  const email = input.email.trim().toLowerCase();
-  const name = input.name.trim();
-  if (!name) {
-    throw new Error("Enter your name");
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("Enter a valid email");
-  }
-  if (input.password.length < 6) {
-    throw new Error("Password must be at least 6 characters");
-  }
-  const users = readUsers();
-  if (users.some((u) => u.email === email)) {
-    throw new Error("Email already registered");
-  }
-  const user: StoredUser = {
-    id: `usr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-    email,
-    name,
-    createdAt: Date.now(),
-    passwordHash: hashPassword(input.password),
-  };
-  writeUsers([user, ...users]);
-  return issueSession({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.createdAt,
+  const response = await fetch(`${requireApiBase()}/users/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: input.email.trim(),
+      password: input.password,
+      displayName: input.name.trim(),
+    }),
   });
+  return readAuthResponse(response);
 }
 
 export async function loginAccount(input: {
@@ -248,18 +311,15 @@ export async function loginWithPassword(input: {
   email: string;
   password: string;
 }): Promise<AuthSession> {
-  const email = input.email.trim().toLowerCase();
-  const users = readUsers();
-  const hit = users.find((u) => u.email === email);
-  if (!hit || hit.passwordHash !== hashPassword(input.password)) {
-    throw new Error("Invalid email or password");
-  }
-  return issueSession({
-    id: hit.id,
-    email: hit.email,
-    name: hit.name,
-    createdAt: hit.createdAt,
+  const response = await fetch(`${requireApiBase()}/users/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: input.email.trim(),
+      password: input.password,
+    }),
   });
+  return readAuthResponse(response);
 }
 
 export async function requestPasswordReset(email: string): Promise<{
@@ -296,9 +356,23 @@ export async function resetPassword(input: {
 }
 
 export function logoutAccount() {
+  const session = getSession();
+  if (session) {
+    void fetch(`${requireApiBase()}/users/logout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.token}`,
+        "X-User-Id": session.user.id,
+      },
+      body: JSON.stringify({ userId: session.user.id }),
+    }).catch(() => undefined);
+  }
+  void signOutFirebaseUser();
   clearSession();
   if (typeof window !== "undefined") {
     localStorage.removeItem(BOUND_KEY);
+    localStorage.removeItem(apiConfig.deviceUserKey);
   }
 }
 

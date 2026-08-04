@@ -8,7 +8,8 @@ import {
   AuthPrimaryButton,
   AuthShell,
 } from "@/components/auth/AuthShell";
-import { loginWithPassword } from "@/lib/authSession";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { loginWithGoogle, loginWithPassword } from "@/lib/authSession";
 import { useApp } from "@/lib/store";
 
 export default function LoginPage() {
@@ -16,10 +17,10 @@ export default function LoginPage() {
   const { pushToast } = useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<"google" | "email" | null>(null);
 
   const submit = async () => {
-    setLoading(true);
+    setLoading("email");
     try {
       await loginWithPassword({ email, password });
       pushToast("Welcome back");
@@ -27,7 +28,20 @@ export default function LoginPage() {
     } catch (e: unknown) {
       pushToast(e instanceof Error ? e.message : "Login failed");
     } finally {
-      setLoading(false);
+      setLoading(null);
+    }
+  };
+
+  const googleSignIn = async () => {
+    setLoading("google");
+    try {
+      await loginWithGoogle();
+      pushToast("Welcome back");
+      router.push("/");
+    } catch (e: unknown) {
+      pushToast(e instanceof Error ? e.message : "Google sign-in failed");
+    } finally {
+      setLoading(null);
     }
   };
 
@@ -49,6 +63,18 @@ export default function LoginPage() {
         </div>
       }
     >
+      <GoogleSignInButton
+        disabled={loading !== null}
+        busy={loading === "google"}
+        onClick={() => void googleSignIn()}
+      />
+      <div className="flex items-center gap-3 py-1" aria-hidden="true">
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">
+          or use email
+        </span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
       <AuthField
         label="Email"
         type="email"
@@ -65,8 +91,12 @@ export default function LoginPage() {
         onChange={setPassword}
         placeholder="••••••••"
       />
-      <AuthPrimaryButton loading={loading} onClick={() => void submit()}>
-        Sign in
+      <AuthPrimaryButton
+        loading={loading === "email"}
+        disabled={loading !== null}
+        onClick={() => void submit()}
+      >
+        Sign in with email
       </AuthPrimaryButton>
     </AuthShell>
   );
