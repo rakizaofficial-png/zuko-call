@@ -51,6 +51,7 @@ expo-app/.fake-home/
 expo-app/android/
 expo-app/ios/
 *.apk
+*.aab
 expo-app/dist/
 CoinCall
 CoinCall/
