@@ -5,7 +5,7 @@
 const {
   withMainActivity,
   createRunOncePlugin,
-} = require("@expo/config-plugins");
+} = require("expo/config-plugins");
 
 function withSecureScreen(config) {
   return withMainActivity(config, (cfg) => {

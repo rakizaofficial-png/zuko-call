@@ -30,6 +30,13 @@ export type VerifyIapResult = {
   transactionId: string;
 };
 
+type PaymentApiTransaction = {
+  id: string;
+  status: string;
+  walletBalance: number;
+  coinsGranted: number;
+};
+
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = requireApiBase();
   const userId = getDeviceUserId();
@@ -50,6 +57,19 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+export async function getPaymentStatus(providerTransactionId: string) {
+  return apiJson<{ ok: boolean; status: string; payment?: { id: string; status: string; coinsGranted: number } }>(
+    `/payments/status?providerTransactionId=${encodeURIComponent(providerTransactionId)}`,
+  );
+}
+
+export async function getPaymentHistory() {
+  return apiJson<{ items: Array<{
+    id: string; productId: string; provider: string; status: string;
+    coinsGranted: number; createdAt: string;
+  }> }>("/payments/history?limit=50");
+}
+
 /**
  * Verify a native purchase token with the backend (authoritative credit).
  */
@@ -60,21 +80,22 @@ export async function verifyIapPurchase(input: {
   /** Google purchaseToken or Apple transaction receipt / JWS */
   purchaseToken: string;
 }): Promise<VerifyIapResult> {
-  const product = getIapProduct(input.productId);
-  if (!product) throw new Error(`Unknown productId: ${input.productId}`);
-
-  // Authoritative credit is server-side from productId catalog.
-  // expectedCoins retained for older API handlers only.
-  return apiJson<VerifyIapResult>("/wallet/iap/verify", {
+  if (!getIapProduct(input.productId) && !['luma_vip_week', 'luma_vip_month', 'luma_vip_year'].includes(input.productId)) {
+    throw new Error(`Unknown productId: ${input.productId}`);
+  }
+  const result = await apiJson<{ ok: boolean; transaction: PaymentApiTransaction }>("/payments/google/verify", {
     method: "POST",
     body: JSON.stringify({
-      userId: input.userId,
       productId: input.productId,
-      platform: input.platform,
       purchaseToken: input.purchaseToken,
-      expectedCoins: product.coins + product.bonusCoins,
     }),
   });
+  return {
+    ok: result.ok,
+    balance: result.transaction.walletBalance,
+    credited: result.transaction.coinsGranted,
+    transactionId: result.transaction.id,
+  };
 }
 
 /** Restore / re-query last Play purchase session after reinstall. */
@@ -136,18 +157,14 @@ export async function restorePurchases(userId?: string): Promise<{
   }
 
   try {
-    const data = await apiJson<{
-      ok?: boolean;
-      balance?: number;
-      restored?: boolean;
-    }>("/wallet/iap/restore", {
+    const data = await apiJson<{ ok: boolean; results: PaymentApiTransaction[] }>("/payments/google/restore", {
       method: "POST",
-      body: JSON.stringify({ userId: id, platform: "google" }),
+      body: JSON.stringify({ purchases: [] }),
     });
     return {
-      restored: Boolean(data.restored || data.ok),
-      balance: data.balance,
-      message: data.restored
+      restored: data.results.length > 0,
+      balance: data.results.at(-1)?.walletBalance,
+      message: data.results.length > 0
         ? "Purchases restored"
         : "No pending purchases to restore",
     };
@@ -169,14 +186,12 @@ export async function createIapCheckoutSession(input: {
   productId: string;
   platform?: IapPlatform;
 }): Promise<{ checkoutUrl: string; sessionId: string }> {
-  return apiJson("/wallet/iap/session", {
+  return apiJson<{ checkoutUrl: string; paymentId: string }>("/payments/stripe/checkout", {
     method: "POST",
     body: JSON.stringify({
-      userId: input.userId,
       productId: input.productId,
-      platform: input.platform || "web",
     }),
-  });
+  }).then((value) => ({ checkoutUrl: value.checkoutUrl, sessionId: value.paymentId }));
 }
 
 /**
@@ -253,7 +268,7 @@ export async function purchaseCoins(input: {
   const session = await createIapCheckoutSession({
     userId,
     productId: input.productId,
-    platform: "google",
+    platform: "web",
   });
   try {
     sessionStorage.setItem(
@@ -271,4 +286,25 @@ export async function purchaseCoins(input: {
   const checkoutUrl = session.checkoutUrl;
   window.location.href = checkoutUrl;
   return { redirected: true, checkoutUrl };
+}
+
+export async function purchaseVip(productId: string): Promise<VerifyIapResult | { redirected: true; checkoutUrl: string }> {
+  const nativeWindow = window as unknown as {
+    __ZUKO_ANDROID__?: number;
+    ZukoNativeIap?: {
+      purchase: (sku: string, type?: "subs") => Promise<{ platform: IapPlatform; purchaseToken: string }>;
+      finish?: (purchaseToken: string) => Promise<void>;
+    };
+  };
+  if (nativeWindow.ZukoNativeIap?.purchase) {
+    const purchase = await nativeWindow.ZukoNativeIap.purchase(productId, "subs");
+    const verified = await verifyIapPurchase({ userId: getDeviceUserId(), productId,
+      platform: purchase.platform || "google", purchaseToken: purchase.purchaseToken });
+    await nativeWindow.ZukoNativeIap.finish?.(purchase.purchaseToken);
+    return verified;
+  }
+  if (nativeWindow.__ZUKO_ANDROID__) throw new Error("Google Play Billing is unavailable. External checkout is disabled in the Play build.");
+  const session = await createIapCheckoutSession({ userId: getDeviceUserId(), productId, platform: "web" });
+  window.location.href = session.checkoutUrl;
+  return { redirected: true, checkoutUrl: session.checkoutUrl };
 }

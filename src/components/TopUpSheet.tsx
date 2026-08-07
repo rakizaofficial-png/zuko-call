@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Coins, ShieldCheck, Sparkles, X, Zap } from "lucide-react";
-import { IAP_PRODUCTS, type IapProduct } from "@/lib/payments/iapCatalog";
+import { IAP_PRODUCTS, getLocalizedIapProducts, type IapProduct } from "@/lib/payments/iapCatalog";
 import { purchaseCoins } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 import { pushSheetCloser } from "@/lib/sheetBackStack";
@@ -26,17 +26,19 @@ export function TopUpSheet({
 }) {
   const { userId, coins, pushToast, syncWallet } = useApp();
   const [busy, setBusy] = useState(false);
+  const [products, setProducts] = useState<IapProduct[]>(IAP_PRODUCTS);
   const [selectedProduct, setSelectedProduct] = useState<string>(
     IAP_PRODUCTS.find((p) => p.popular)?.productId || IAP_PRODUCTS[0]!.productId,
   );
 
   useEffect(() => {
     if (!open) return;
+    void getLocalizedIapProducts().then(setProducts).catch(() => undefined);
     return pushSheetCloser(onClose);
   }, [open, onClose]);
 
   const product: IapProduct =
-    IAP_PRODUCTS.find((p) => p.productId === selectedProduct) || IAP_PRODUCTS[0]!;
+    products.find((p) => p.productId === selectedProduct) || products[0]!;
   const totalCoins = product.coins + product.bonusCoins;
 
   const payNow = async () => {
@@ -119,7 +121,7 @@ export function TopUpSheet({
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              {IAP_PRODUCTS.map((tier, i) => {
+              {products.map((tier, i) => {
                 const total = tier.coins + tier.bonusCoins;
                 const active = tier.productId === selectedProduct;
                 return (
@@ -172,7 +174,7 @@ export function TopUpSheet({
 
             <p className="mt-4 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
               <ShieldCheck className="h-3 w-3 text-emerald-400" />
-              Google Play Billing · secure
+              Secure provider-verified payment
             </p>
 
             <button

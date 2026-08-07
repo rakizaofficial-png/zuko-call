@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import {
   Component,
   useCallback,
@@ -31,7 +31,7 @@ import {
   endConnection,
   finishTransaction,
   getAvailablePurchases,
-  getProducts,
+  fetchProducts,
   initConnection,
   purchaseErrorListener,
   purchaseUpdatedListener,
@@ -72,6 +72,7 @@ const IAP_PRODUCT_IDS = [
   "luma_coins_5000",
   "luma_coins_10000",
 ];
+const IAP_SUBSCRIPTION_IDS = ["luma_vip_week", "luma_vip_month", "luma_vip_year"];
 
 async function loadOrCreateInstallId(): Promise<string> {
   try {
@@ -165,7 +166,7 @@ function ZukoWebShell() {
 
   const injectIapResult = useCallback(
     (
-      callbackName: "__ZUKO_IAP_CB__" | "__ZUKO_IAP_RESTORE_CB__",
+      callbackName: "__ZUKO_IAP_CB__" | "__ZUKO_IAP_RESTORE_CB__" | "__ZUKO_IAP_PRODUCTS_CB__",
       method: "resolve" | "reject",
       value: unknown,
     ) => {
@@ -223,9 +224,9 @@ true;`);
           );
         });
 
-        const products = await getProducts({ skus: IAP_PRODUCT_IDS });
+        const products = (await fetchProducts({ skus: IAP_PRODUCT_IDS, type: "in-app" })) || [];
         availableIapProductsRef.current = new Set(
-          products.map((product) => product.productId),
+          products.map((product) => product.id),
         );
         iapReadyRef.current = true;
       } catch (error) {
@@ -250,8 +251,17 @@ true;`);
       type?: string;
       sku?: string;
       purchaseToken?: string;
+      productType?: string;
     }) => {
       try {
+        if (data.type === "ZUKO_IAP_PRODUCTS") {
+          const products = (await fetchProducts({ skus: [...IAP_PRODUCT_IDS, ...IAP_SUBSCRIPTION_IDS], type: "all" })) || [];
+          injectIapResult("__ZUKO_IAP_PRODUCTS_CB__", "resolve", products.map((product) => ({
+            productId: product.id,
+            displayPrice: product.displayPrice,
+          })));
+          return;
+        }
         if (!iapReadyRef.current) {
           throw new Error(
             "Google Play Billing is not ready. Close and reopen the app, then try again.",
@@ -260,23 +270,33 @@ true;`);
 
         if (data.type === "ZUKO_IAP_PURCHASE") {
           const productId = String(data.sku || "").trim();
-          if (!IAP_PRODUCT_IDS.includes(productId)) {
+          const isSubscription = data.productType === "subs" || IAP_SUBSCRIPTION_IDS.includes(productId);
+          if (![...IAP_PRODUCT_IDS, ...IAP_SUBSCRIPTION_IDS].includes(productId)) {
             throw new Error(`Unknown Google Play product: ${productId}`);
           }
 
           // Refresh this SKU immediately before checkout. This prevents a stale
           // startup query from turning a valid Play product into an opaque
           // "unknown product" failure.
-          const products = await getProducts({ skus: [productId] });
+          const products = (await fetchProducts({ skus: [productId], type: isSubscription ? "subs" : "in-app" })) || [];
           for (const product of products) {
-            availableIapProductsRef.current.add(product.productId);
+            availableIapProductsRef.current.add(product.id);
           }
           if (!availableIapProductsRef.current.has(productId)) {
             throw new Error(
               `Google Play product ${productId} is unavailable. Install Zuko from the Play internal test track, sign in with an approved tester account, and make sure this product is active in Play Console.`,
             );
           }
-          await requestPurchase({ skus: [productId] });
+          if (isSubscription) {
+            const subscription = products.find((item) => item.id === productId && item.type === "subs");
+            const offerToken = subscription?.type === "subs" && subscription.platform === "android"
+              ? subscription.subscriptionOffers.find((offer) => offer.offerTokenAndroid)?.offerTokenAndroid
+              : undefined;
+            if (!offerToken) throw new Error("No eligible Google Play subscription offer is available.");
+            await requestPurchase({ request: { google: { skus: [productId], subscriptionOffers: [{ sku: productId, offerToken }] } }, type: "subs" });
+          } else {
+            await requestPurchase({ request: { google: { skus: [productId] } }, type: "in-app" });
+          }
           return;
         }
 
@@ -316,7 +336,7 @@ true;`);
           if (!purchase) {
             throw new Error("Verified purchase was not found on this device.");
           }
-          await finishTransaction({ purchase, isConsumable: true });
+          await finishTransaction({ purchase, isConsumable: !IAP_SUBSCRIPTION_IDS.includes(purchase.productId) });
           pendingPurchasesRef.current.delete(purchaseToken);
         }
       } catch (error) {
@@ -480,12 +500,12 @@ true;`);
   } catch (e) {}
   var nativeIap = window.ZukoNativeIap || window.LumaNativeIap || {
     isNativeGooglePlay: true,
-    purchase: function(sku){
+    purchase: function(sku, productType){
       return new Promise(function(resolve, reject){
         try {
           if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
             window.__ZUKO_IAP_CB__ = { resolve: resolve, reject: reject, sku: sku };
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_PURCHASE', sku: sku }));
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_PURCHASE', sku: sku, productType: productType || 'in-app' }));
           } else { reject(new Error('Native bridge unavailable')); }
         } catch (err) { reject(err); }
       });
@@ -497,6 +517,14 @@ true;`);
             window.__ZUKO_IAP_RESTORE_CB__ = { resolve: resolve, reject: reject };
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_RESTORE' }));
           } else { reject(new Error('Native bridge unavailable')); }
+        } catch (err) { reject(err); }
+      });
+    },
+    products: function(){
+      return new Promise(function(resolve, reject){
+        try {
+          window.__ZUKO_IAP_PRODUCTS_CB__ = { resolve: resolve, reject: reject };
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_PRODUCTS' }));
         } catch (err) { reject(err); }
       });
     },
@@ -608,6 +636,7 @@ true;`;
                   };
                   if (
                     data.type === "ZUKO_IAP_PURCHASE" ||
+                    data.type === "ZUKO_IAP_PRODUCTS" ||
                     data.type === "ZUKO_IAP_RESTORE" ||
                     data.type === "ZUKO_IAP_FINISH"
                   ) {
@@ -657,7 +686,7 @@ true;`;
 function AppShell({ shellKey }: { shellKey: number }) {
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom", "left", "right"]}>
-      <StatusBar style="light" backgroundColor="#0b0d12" translucent={false} />
+      <StatusBar style="light" />
       <ZukoWebShell key={shellKey} />
     </SafeAreaView>
   );
@@ -698,7 +727,7 @@ const styles = StyleSheet.create({
   },
   btnText: { color: "#0b0d12", fontWeight: "800", fontSize: 15 },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(11,13,18,0.72)",

@@ -16,30 +16,32 @@ import {
   Zap,
 } from "lucide-react";
 import { useApp } from "@/lib/store";
+import { purchaseVip } from "@/lib/payments/iap";
+import { getNativeLocalizedPrices } from "@/lib/payments/iapCatalog";
 
 const plans = [
   {
-    id: "week",
+    id: "luma_vip_week",
     name: "VIP Week",
-    price: "$4.99",
+    price: "Store price",
     period: "/ week",
-    coins: 200,
+    coins: 100,
     tag: null as string | null,
   },
   {
-    id: "month",
+    id: "luma_vip_month",
     name: "VIP Month",
-    price: "$12.99",
+    price: "Store price",
     period: "/ month",
-    coins: 800,
+    coins: 500,
     tag: "Most popular",
   },
   {
-    id: "year",
+    id: "luma_vip_year",
     name: "VIP Year",
-    price: "$79.99",
+    price: "Store price",
     period: "/ year",
-    coins: 12000,
+    coins: 7500,
     tag: "Best Value",
   },
 ];
@@ -105,20 +107,28 @@ function useOfferCountdown(hours = 6) {
 }
 
 export default function PremiumPage() {
-  const { isPremium, activatePremium, pushToast, xp, vipTier, openTopUp } =
+  const { isPremium, pushToast, xp, vipTier, syncWallet } =
     useApp();
   const [busy, setBusy] = useState<string | null>(null);
+  const [localizedPrices, setLocalizedPrices] = useState<Map<string, string>>(new Map());
   const countdown = useOfferCountdown(6);
+
+  useEffect(() => {
+    void getNativeLocalizedPrices().then(setLocalizedPrices).catch(() => undefined);
+  }, []);
 
   const subscribe = async (planId: string) => {
     const plan = plans.find((p) => p.id === planId)!;
     setBusy(planId);
     pushToast("VIP requires a verified purchase…");
     try {
-      await activatePremium(plan.id, plan.coins);
-    } catch {
-      openTopUp(30);
-      pushToast("Complete a coin purchase to unlock VIP");
+      const result = await purchaseVip(plan.id);
+      if (!("redirected" in result)) {
+        await syncWallet();
+        pushToast("VIP activated after provider verification");
+      }
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "VIP purchase failed");
     } finally {
       setBusy(null);
     }
@@ -231,7 +241,7 @@ export default function PremiumPage() {
               </div>
               <div className="text-right">
                 <p className="font-display text-lg font-extrabold">
-                  {busy === plan.id ? "…" : plan.price}
+                  {busy === plan.id ? "…" : localizedPrices.get(plan.id) || plan.price}
                 </p>
                 <p className="text-[10px] text-muted">{plan.period}</p>
               </div>

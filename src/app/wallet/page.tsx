@@ -8,7 +8,7 @@ import {
   type WalletLedgerEntry,
 } from "@/lib/walletApi";
 import { listCoinTransactions } from "@/lib/coinLedger";
-import { restorePurchases } from "@/lib/payments/iap";
+import { getPaymentHistory, restorePurchases } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 
 type Tab = "all" | "recharge" | "spend" | "refund" | "gift";
@@ -23,7 +23,18 @@ export default function WalletPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const h = await fetchWalletHistory();
+      const [h, payments] = await Promise.all([
+        fetchWalletHistory(),
+        getPaymentHistory().catch(() => ({ items: [] })),
+      ]);
+      const verifiedPayments: WalletLedgerEntry[] = payments.items.map((payment) => ({
+        id: `payment_${payment.id}`,
+        amount: payment.status === "REFUNDED" || payment.status === "REVOKED"
+          ? -payment.coinsGranted : payment.coinsGranted,
+        reason: `${payment.productId} · ${payment.provider} · ${payment.status}`,
+        kind: payment.status === "REFUNDED" || payment.status === "REVOKED" ? "spend" : "credit",
+        at: new Date(payment.createdAt).getTime(),
+      }));
       const local = listCoinTransactions(40).map((t) => ({
         id: t.id,
         amount: t.amount,
@@ -37,7 +48,7 @@ export default function WalletPage() {
           : "spend") as "credit" | "spend",
         at: t.at,
       }));
-      const merged = [...(h.length ? h : engagement.coinHistory), ...local];
+      const merged = [...verifiedPayments, ...(h.length ? h : engagement.coinHistory), ...local];
       const seen = new Set<string>();
       setEntries(
         merged.filter((e) => {
@@ -54,6 +65,8 @@ export default function WalletPage() {
   };
 
   useEffect(() => {
+    // The external wallet is intentionally refreshed whenever its server-backed balance changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coins, engagement.coinHistory]);

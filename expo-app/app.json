@@ -6,17 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
     "androidStatusBar": {
       "backgroundColor": "#0b0d12",
       "barStyle": "light-content",
       "translucent": false,
       "hidden": false
-    },
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0b0d12"
     },
     "ios": {
       "supportsTablet": false,
@@ -57,10 +51,19 @@
     "plugins": [
       "expo-system-ui",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0b0d12"
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "kotlinVersion": "2.2.0"
           }
         }
       ],

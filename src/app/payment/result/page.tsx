@@ -4,20 +4,36 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, RefreshCw, XCircle } from "lucide-react";
-import { restorePurchases } from "@/lib/payments/iap";
+import { getPaymentStatus, restorePurchases } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 
 function PaymentResultInner() {
   const search = useSearchParams();
   const { syncWallet, pushToast, coins } = useApp();
-  const status = (search.get("status") || "success").toLowerCase();
+  const requestedStatus = (search.get("status") || "").toLowerCase();
+  const sessionId = search.get("session_id") || "";
+  const [status, setStatus] = useState(requestedStatus === "cancelled" ? "cancelled" : "processing");
   const [restoring, setRestoring] = useState(false);
-  const ok = status === "success" || status === "ok";
+  const ok = status === "completed";
   const failed = status === "failed" || status === "fail" || status === "error";
 
   useEffect(() => {
-    if (ok) void syncWallet();
-  }, [ok, syncWallet]);
+    if (!sessionId || requestedStatus === "cancelled") return;
+    let stopped = false;
+    let attempts = 0;
+    const poll = async () => {
+      try {
+        const result = await getPaymentStatus(sessionId);
+        if (stopped) return;
+        setStatus(result.status.toLowerCase());
+        if (result.status === "COMPLETED") { await syncWallet(); return; }
+      } catch { /* webhook may still be processing */ }
+      attempts += 1;
+      if (!stopped && attempts < 20) window.setTimeout(() => void poll(), 1500);
+    };
+    void poll();
+    return () => { stopped = true; };
+  }, [requestedStatus, sessionId, syncWallet]);
 
   const onRestore = async () => {
     setRestoring(true);
@@ -38,12 +54,14 @@ function PaymentResultInner() {
         <XCircle className="h-16 w-16 text-coral" />
       )}
       <h1 className="mt-4 font-display text-2xl font-extrabold">
-        {ok ? "Payment successful" : failed ? "Payment failed" : "Payment status"}
+        {ok ? "Payment successful" : failed ? "Payment failed" : status === "cancelled" ? "Payment cancelled" : "Verifying payment…"}
       </h1>
       <p className="mt-2 max-w-sm text-sm text-muted">
         {ok
           ? `Coins credited to your wallet. Balance: ${coins.toLocaleString()}.`
-          : "No coins were charged. You can retry checkout or restore a pending Play purchase."}
+          : status === "processing"
+            ? "We are waiting for secure provider verification. Keep this page open."
+            : "No verified credit was applied. You can retry checkout or restore a pending Play purchase."}
       </p>
       <div className="mt-6 flex w-full max-w-sm flex-col gap-2">
         <Link
