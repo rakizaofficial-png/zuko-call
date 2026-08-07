@@ -105,8 +105,18 @@ export async function restorePurchases(userId?: string): Promise<{
   message: string;
 }> {
   const id = userId || getDeviceUserId();
-  const nativeBridge = (
+  const nativeWindow = (
     window as unknown as {
+      ZukoNativeIap?: {
+        restore?: () => Promise<
+          Array<{
+            platform: IapPlatform;
+            productId: string;
+            purchaseToken: string;
+          }>
+        >;
+        finish?: (purchaseToken: string) => Promise<void>;
+      };
       LumaNativeIap?: {
         restore?: () => Promise<
           Array<{
@@ -118,7 +128,8 @@ export async function restorePurchases(userId?: string): Promise<{
         finish?: (purchaseToken: string) => Promise<void>;
       };
     }
-  ).LumaNativeIap;
+  );
+  const nativeBridge = nativeWindow.ZukoNativeIap || nativeWindow.LumaNativeIap;
 
   if (nativeBridge?.restore) {
     try {
@@ -128,10 +139,13 @@ export async function restorePurchases(userId?: string): Promise<{
 
       for (const purchase of purchases) {
         const product = getIapProduct(purchase.productId);
-        if (!product || !purchase.purchaseToken) continue;
+        const isVip = ["luma_vip_week", "luma_vip_month", "luma_vip_year"].includes(
+          purchase.productId,
+        );
+        if ((!product && !isVip) || !purchase.purchaseToken) continue;
         const verified = await verifyIapPurchase({
           userId: id,
-          productId: product.productId,
+          productId: purchase.productId,
           platform: purchase.platform || "google",
           purchaseToken: purchase.purchaseToken,
         });
