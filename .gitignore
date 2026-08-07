@@ -24,6 +24,10 @@
 .DS_Store
 .idea/
 *.pem
+*.jks
+*.keystore
+keystore.properties
+credentials.json
 
 # debug
 npm-debug.log*
