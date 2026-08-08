@@ -12,6 +12,7 @@ import {
 import {
   ActivityIndicator,
   BackHandler,
+  PermissionsAndroid,
   Platform,
   Pressable,
   StatusBar as RNStatusBar,
@@ -624,6 +625,7 @@ true;`;
                     type?: string;
                     sku?: string;
                     purchaseToken?: string;
+                    requestId?: string;
                     handled?: boolean;
                     count?: number;
                   };
@@ -634,6 +636,39 @@ true;`;
                     data.type === "ZUKO_IAP_FINISH"
                   ) {
                     void handleIapMessage(data);
+                    return;
+                  }
+                  if (data.type === "ZUKO_MEDIA_PERMISSION_REQUEST") {
+                    const requestId = String(data.requestId || "");
+                    if (!requestId || Platform.OS !== "android") return;
+                    void (async () => {
+                      let granted = false;
+                      let error = "Camera and microphone permission was denied.";
+                      try {
+                        const result = await PermissionsAndroid.requestMultiple([
+                          PermissionsAndroid.PERMISSIONS.CAMERA,
+                          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+                        ]);
+                        granted =
+                          result[PermissionsAndroid.PERMISSIONS.CAMERA] ===
+                            PermissionsAndroid.RESULTS.GRANTED &&
+                          result[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] ===
+                            PermissionsAndroid.RESULTS.GRANTED;
+                        if (!granted) {
+                          error =
+                            "Allow camera and microphone in Android Settings to start a video call.";
+                        }
+                      } catch {
+                        error = "Android could not request camera and microphone permission.";
+                      }
+                      webRef.current?.injectJavaScript(`
+(function(){
+  window.dispatchEvent(new CustomEvent('zuko:media-permission', {
+    detail: ${JSON.stringify({ requestId, granted, error })}
+  }));
+})();
+true;`);
+                    })();
                     return;
                   }
                   if (data.type === "ZUKO_BACK_AT_ROOT") {

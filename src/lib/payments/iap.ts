@@ -52,7 +52,14 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.error || `IAP request failed (${res.status})`);
+    // The payment API intentionally returns a safe customer-facing message
+    // for provider failures. Prefer it over a machine code such as
+    // STRIPE_CHECKOUT_UNAVAILABLE, while retaining a safe fallback.
+    throw new Error(
+      typeof data?.message === "string" && data.message.trim()
+        ? data.message
+        : data?.error || `IAP request failed (${res.status})`,
+    );
   }
   return data as T;
 }
@@ -200,12 +207,45 @@ export async function createIapCheckoutSession(input: {
   productId: string;
   platform?: IapPlatform;
 }): Promise<{ checkoutUrl: string; sessionId: string }> {
+  const requestId = getCheckoutRetryKey(input.userId, input.productId);
   return apiJson<{ checkoutUrl: string; paymentId: string }>("/payments/stripe/checkout", {
     method: "POST",
+    headers: { "Idempotency-Key": requestId },
     body: JSON.stringify({
       productId: input.productId,
     }),
   }).then((value) => ({ checkoutUrl: value.checkoutUrl, sessionId: value.paymentId }));
+}
+
+/**
+ * Keeps one idempotency key while a browser retries the same product checkout
+ * after a lost request/response. The backend additionally scopes it to the
+ * authenticated account, so this browser-only value is never an authority.
+ */
+function getCheckoutRetryKey(userId: string, productId: string): string {
+  const storageKey = `zuko_checkout_retry_v1:${userId}:${productId}`;
+  const now = Date.now();
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null") as
+      | { id?: string; createdAt?: number }
+      | null;
+    if (
+      saved &&
+      typeof saved.id === "string" &&
+      /^[A-Za-z0-9_-]{16,128}$/.test(saved.id) &&
+      typeof saved.createdAt === "number" &&
+      now - saved.createdAt < 15 * 60_000
+    ) return saved.id;
+    const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID().replace(/-/g, "")
+      : `${now.toString(36)}${Math.random().toString(36).slice(2, 18)}`;
+    sessionStorage.setItem(storageKey, JSON.stringify({ id, createdAt: now }));
+    return id;
+  } catch {
+    // Session storage can be disabled. Generate a retry key anyway; the
+    // server still enforces token-authentication and entitlement idempotency.
+    return `${now.toString(36)}${Math.random().toString(36).slice(2, 18)}`;
+  }
 }
 
 /**
