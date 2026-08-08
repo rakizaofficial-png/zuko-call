@@ -570,7 +570,7 @@ true;`;
               source={source}
               style={styles.webview}
               injectedJavaScriptBeforeContentLoaded={installBridge}
-              mediaCapturePermissionGrantType="grant"
+              mediaCapturePermissionGrantType="grantIfSameHostElseDeny"
               onNavigationStateChange={(nav: WebViewNavigation) => {
                 canGoBackRef.current = Boolean(nav.canGoBack);
               }}
@@ -614,8 +614,6 @@ true;`;
               setSupportMultipleWindows={false}
               originWhitelist={[
                 "https://luma-user.onrender.com*",
-                "https://*.onrender.com*",
-                "https://*",
               ]}
               mixedContentMode="compatibility"
               androidLayerType="hardware"

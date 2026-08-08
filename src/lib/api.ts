@@ -100,6 +100,8 @@ export async function getCall(callId: string): Promise<BridgeCall> {
 export async function endCall(callId: string) {
   const res = await fetch(`${requireApiBase()}/calls/${callId}/end`, {
     method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({ reason: "user" }),
   });
   // Idempotent success for already-ended / missing calls
   if (res.ok || res.status === 404 || res.status === 409 || res.status === 410) {
