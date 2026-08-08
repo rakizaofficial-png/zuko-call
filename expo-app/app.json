@@ -2,7 +2,7 @@
   "expo": {
     "name": "Zuko",
     "slug": "zuko",
-    "version": "1.0.18",
+    "version": "1.0.19",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.zuko.user",
-      "versionCode": 20,
+      "versionCode": 21,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0b0d12"
@@ -32,6 +32,7 @@
         "CAMERA",
         "RECORD_AUDIO",
         "INTERNET",
+        "com.android.vending.BILLING",
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
         "MODIFY_AUDIO_SETTINGS",

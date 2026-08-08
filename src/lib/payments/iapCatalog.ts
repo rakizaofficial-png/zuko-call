@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * IN-APP PURCHASE CATALOG — TikTok-style coin ladder (Google Play / Apple)
+ * IN-APP PURCHASE CATALOG — Google Play consumable coin products
  * =============================================================================
  * Play Console productIds must match exactly.
  */
@@ -21,72 +21,42 @@ export type IapProduct = {
 
 export const IAP_PRODUCTS: IapProduct[] = [
   {
-    productId: "luma_coins_50",
-    platformSku: { google: "luma_coins_50", apple: "luma_coins_50" },
-    coins: 50,
+    productId: "zuko_coins_90",
+    platformSku: { google: "zuko_coins_90", apple: "zuko_coins_90" },
+    coins: 90,
     bonusCoins: 0,
     priceLabel: "Store price",
-    title: "50",
+    title: "90",
   },
   {
-    productId: "luma_coins_100",
-    platformSku: { google: "luma_coins_100", apple: "luma_coins_100" },
-    coins: 100,
+    productId: "zuko_coins_600",
+    platformSku: { google: "zuko_coins_600", apple: "zuko_coins_600" },
+    coins: 600,
     bonusCoins: 0,
     priceLabel: "Store price",
-    title: "100",
-  },
-  {
-    productId: "luma_coins_250",
-    platformSku: { google: "luma_coins_250", apple: "luma_coins_250" },
-    coins: 250,
-    bonusCoins: 10,
-    priceLabel: "Store price",
-    title: "250",
-  },
-  {
-    productId: "luma_coins_500",
-    platformSku: { google: "luma_coins_500", apple: "luma_coins_500" },
-    coins: 500,
-    bonusCoins: 50,
-    priceLabel: "Store price",
-    title: "500",
-  },
-  {
-    productId: "luma_coins_1000",
-    platformSku: { google: "luma_coins_1000", apple: "luma_coins_1000" },
-    coins: 1000,
-    bonusCoins: 120,
-    priceLabel: "Store price",
-    title: "1,000",
+    title: "600",
     popular: true,
   },
   {
-    productId: "luma_coins_2000",
-    platformSku: { google: "luma_coins_2000", apple: "luma_coins_2000" },
-    coins: 2000,
-    bonusCoins: 350,
+    productId: "zuko_coins_1300",
+    platformSku: { google: "zuko_coins_1300", apple: "zuko_coins_1300" },
+    coins: 1300,
+    bonusCoins: 0,
     priceLabel: "Store price",
-    title: "2,000",
-  },
-  {
-    productId: "luma_coins_5000",
-    platformSku: { google: "luma_coins_5000", apple: "luma_coins_5000" },
-    coins: 5000,
-    bonusCoins: 1000,
-    priceLabel: "Store price",
-    title: "5,000",
+    title: "1,300",
     best: true,
   },
-  {
-    productId: "luma_coins_10000",
-    platformSku: { google: "luma_coins_10000", apple: "luma_coins_10000" },
-    coins: 10000,
-    bonusCoins: 2500,
-    priceLabel: "Store price",
-    title: "10,000",
-  },
 ];
+
+/** Historical products stay recognizable for verified restoration only. */
+export const LEGACY_IAP_PRODUCT_IDS = new Set([
+  "luma_coins_50", "luma_coins_100", "luma_coins_250", "luma_coins_500",
+  "luma_coins_1000", "luma_coins_2000", "luma_coins_5000", "luma_coins_10000",
+]);
+
+export function isKnownIapProduct(productId: string) {
+  return Boolean(getIapProduct(productId)) || LEGACY_IAP_PRODUCT_IDS.has(productId);
+}
 
 export function getIapProduct(productId: string) {
   return IAP_PRODUCTS.find((p) => p.productId === productId) ?? null;

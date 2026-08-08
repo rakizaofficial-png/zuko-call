@@ -18,7 +18,7 @@
 import { requireApiBase } from "@/config/apiConfig";
 import { getAuthHeaders } from "@/lib/authSession";
 import { getDeviceUserId } from "@/lib/walletApi";
-import { getIapProduct } from "./iapCatalog";
+import { getIapProduct, isKnownIapProduct } from "./iapCatalog";
 import { markTxCompleted, recordPendingTx } from "@/lib/coinLedger";
 
 export type IapPlatform = "google" | "apple" | "web";
@@ -80,7 +80,7 @@ export async function verifyIapPurchase(input: {
   /** Google purchaseToken or Apple transaction receipt / JWS */
   purchaseToken: string;
 }): Promise<VerifyIapResult> {
-  if (!getIapProduct(input.productId) && !['luma_vip_week', 'luma_vip_month', 'luma_vip_year'].includes(input.productId)) {
+  if (!isKnownIapProduct(input.productId) && !['luma_vip_week', 'luma_vip_month', 'luma_vip_year'].includes(input.productId)) {
     throw new Error(`Unknown productId: ${input.productId}`);
   }
   const result = await apiJson<{ ok: boolean; transaction: PaymentApiTransaction }>("/payments/google/verify", {
@@ -142,7 +142,7 @@ export async function restorePurchases(userId?: string): Promise<{
         const isVip = ["luma_vip_week", "luma_vip_month", "luma_vip_year"].includes(
           purchase.productId,
         );
-        if ((!product && !isVip) || !purchase.purchaseToken) continue;
+        if ((!isKnownIapProduct(purchase.productId) && !isVip) || !purchase.purchaseToken) continue;
         const verified = await verifyIapPurchase({
           userId: id,
           productId: purchase.productId,
