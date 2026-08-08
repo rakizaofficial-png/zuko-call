@@ -5,6 +5,7 @@ import {
   createCall,
   endCall as endBridgeCall,
   fetchCallToken,
+  reportRtcConnected,
   fetchHostProfile,
   getCall,
   waitForAccept,
@@ -232,6 +233,7 @@ export function useCallSessionEngine(opts: {
             remoteVideoEl: remoteRef.current,
             audioOnly: Boolean(audioOnly),
           });
+          await reportRtcConnected(accepted.id, accepted.userId);
           if (cancelledRef.current) return;
           setStatusText(`Connected with ${host.name}`);
           onConnectedRef.current?.({
@@ -388,6 +390,7 @@ export function useCallSessionEngine(opts: {
             remoteVideoEl: remoteRef.current,
             audioOnly: Boolean(audioOnly),
           });
+          await reportRtcConnected(accepted.id, getDeviceUserId());
           if (cancelledRef.current) return;
           setStatusText(`Connected with ${host.name}`);
           onConnectedRef.current?.({ transport: "agora_live", name: host.name });

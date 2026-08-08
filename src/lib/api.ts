@@ -4,6 +4,7 @@
  */
 
 import { apiConfig, requireApiBase } from "@/config/apiConfig";
+import { getAuthHeaders } from "@/lib/authSession";
 
 export const API_BASE_URL = apiConfig.apiBaseUrl;
 
@@ -13,6 +14,7 @@ export type LiveHost = {
   avatarUrl?: string;
   country?: string;
   ratePerMinute: number;
+  chargePerMinute?: number;
   isOnline: boolean;
   isLive: boolean;
   isOnCall: boolean;
@@ -80,7 +82,7 @@ export async function createCall(input: {
 }): Promise<BridgeCall> {
   const res = await fetch(`${requireApiBase()}/calls`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(input),
   });
   const data = await parse<{ call: BridgeCall }>(res);
@@ -110,6 +112,7 @@ export async function endCall(callId: string) {
 export async function fetchCallToken(callId: string) {
   const res = await fetch(
     `${requireApiBase()}/calls/${callId}/token?role=user`,
+    { headers: getAuthHeaders() },
   );
   return parse<{
     token: string;
@@ -118,6 +121,15 @@ export async function fetchCallToken(callId: string) {
     channel: string;
     call: BridgeCall;
   }>(res);
+}
+
+export async function reportRtcConnected(callId: string, userId: string) {
+  const res = await fetch(`${requireApiBase()}/calls/${callId}/rtc-connected`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ userId, role: 'user' }),
+  });
+  return parse<{ ok: boolean; connectedAt: number | null }>(res);
 }
 
 export async function searchProfileByAppId(appId: string): Promise<{
