@@ -86,7 +86,7 @@ export async function fetchOrCreateWallet(): Promise<WalletSnapshot> {
       installId: ensureInstallId(),
     }),
   });
-  let wallet = data.wallet;
+  const wallet = data.wallet;
   const welcomeBonus = Boolean(data.welcomeBonus);
 
   if (

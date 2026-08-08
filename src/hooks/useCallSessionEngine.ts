@@ -72,8 +72,13 @@ export function useCallSessionEngine(opts: {
   } = opts;
   const onConnectedRef = useRef(onConnected);
   const onFailedRef = useRef(onFailed);
-  onConnectedRef.current = onConnected;
-  onFailedRef.current = onFailed;
+  // Keep callbacks current without mutating refs while React is rendering.
+  // The call lifecycle effect is declared after this effect, so a newly
+  // mounted engine observes the supplied callbacks before it begins routing.
+  useEffect(() => {
+    onConnectedRef.current = onConnected;
+    onFailedRef.current = onFailed;
+  }, [onConnected, onFailed]);
 
   const [state, setState] = useState<CallEngineState>("IDLE");
   const [transport, setTransport] = useState<CallTransport | null>(null);
