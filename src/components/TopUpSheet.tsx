@@ -40,10 +40,15 @@ export function TopUpSheet({
   const product: IapProduct =
     products.find((p) => p.productId === selectedProduct) || products[0]!;
   const totalCoins = product.coins + product.bonusCoins;
+  const checkoutUnavailable = product.available === false;
 
   const payNow = async () => {
     if (!userId) {
       pushToast("Wallet not ready — retry in a moment");
+      return;
+    }
+    if (checkoutUnavailable) {
+      pushToast("Card checkout is not configured yet. Please try again later.");
       return;
     }
     setBusy(true);
@@ -131,8 +136,9 @@ export function TopUpSheet({
                     initial={{ opacity: 0, scale: 0.94 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.04 }}
+                    disabled={tier.available === false}
                     onClick={() => setSelectedProduct(tier.productId)}
-                    className={`relative overflow-hidden rounded-2xl border px-3 py-3.5 text-left transition active:scale-[0.98] ${
+                    className={`relative overflow-hidden rounded-2xl border px-3 py-3.5 text-left transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 ${
                       active
                         ? "border-gold bg-gradient-to-br from-gold/25 via-coral/10 to-ink-2 shadow-[0_0_24px_rgba(255,184,0,0.25)]"
                         : "border-white/10 bg-white/[0.04]"
@@ -179,13 +185,15 @@ export function TopUpSheet({
 
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || checkoutUnavailable}
               onClick={() => void payNow()}
               className="mt-3 mb-2 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-gold via-amber-400 to-coral font-display text-lg font-extrabold text-ink shadow-[0_8px_32px_rgba(255,184,0,0.35)] disabled:opacity-60"
             >
               {busy
                 ? "…"
-                : warningMessage && /insufficient/i.test(warningMessage)
+                : checkoutUnavailable
+                  ? "Card checkout unavailable"
+                  : warningMessage && /insufficient/i.test(warningMessage)
                   ? `Recharge · ${product.priceLabel}`
                   : `Pay ${product.priceLabel} · ${totalCoins.toLocaleString()} coins`}
             </button>

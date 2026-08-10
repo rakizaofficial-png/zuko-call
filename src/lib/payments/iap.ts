@@ -306,6 +306,9 @@ export async function purchaseCoins(input: {
   if (bridge?.purchase) {
     const product = getIapProduct(input.productId);
     if (!product) throw new Error("Unknown product");
+    if (product.webOnly) {
+      throw new Error("This card package is available on the Zuko website only.");
+    }
     const native = await bridge.purchase(product.platformSku.google, "in-app", userId);
     if (native?.purchaseToken) {
       const txId = `tx_iap_${input.productId}_${native.purchaseToken.slice(0, 24)}`;
