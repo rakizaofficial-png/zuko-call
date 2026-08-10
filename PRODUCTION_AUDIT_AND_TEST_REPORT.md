@@ -10,12 +10,11 @@
 - **Production readiness score:** 35/100
 - **Release recommendation:** **NO-GO**
 - **Critical blockers:**
-  1. No completed release-candidate AAB has yet been verified against the approved Play upload certificate. An EAS cloud candidate is queued with managed signing credentials.
-  2. Real User-to-Host device testing of camera, microphone, Agora media, reconnects, and billing has not occurred.
-  3. The deployed API reported `onlineHosts: 0` and `readyHosts: 0`; the User calling lobby therefore has no callable Hosts.
-  4. Browser Stripe catalog products are all `available: false`; live web Checkout cannot complete.
-  5. Financial/call persistence reports `mongo+disk`, while legacy Firebase/client fallback architecture remains in other paths. Full Mongo replica-set transaction authority is not proven.
-  6. The User source has no complete Privacy Policy route or account-deletion route.
+  1. Real User-to-Host device testing of camera, microphone, Agora media, reconnects, and billing has not occurred.
+  2. The deployed API reported `onlineHosts: 0` and `readyHosts: 0`; the User calling lobby therefore has no callable Hosts.
+  3. Browser Stripe catalog products are all `available: false`; live web Checkout cannot complete.
+  4. Financial/call persistence reports `mongo+disk`, while legacy Firebase/client fallback architecture remains in other paths. Full Mongo replica-set transaction authority is not proven.
+  5. The User source has no complete Privacy Policy route or account-deletion route.
 
 ### Work completed and verified
 
@@ -24,6 +23,7 @@
 - Removed the direct client `/wallet/credit` alternate fallback from a live-call reserve refund helper.
 - Confirmed User app production web build and TypeScript checks pass.
 - Confirmed Android configuration is `com.zuko.user`, version `1.0.19`, with `CAMERA`, `RECORD_AUDIO`, and Play Billing permission. EAS remote versioning has queued the release candidate as version code `23`.
+- Produced and verified the release-candidate AAB using the exact Google Play upload certificate.
 - Queried deployed User/API endpoints and payment catalog without making any production mutation.
 
 ### Test evidence
@@ -37,7 +37,7 @@
 | Root ESLint | FAIL | `npm run lint`: 27 remaining pre-existing errors after the release-critical call-screen repair |
 | CoinCall backend tests | PASS | Earlier verified in this audit thread: 23/23 passed |
 | Admin production build | PASS | Earlier verified in this audit thread |
-| EAS production release candidate | IN PROGRESS | Android store AAB, `1.0.19` / code `23`, commit `895469e`; certificate verification pending |
+| EAS production release candidate | PASS | `expo-app/builds/Zuko-1.0.19-code23-release.aab`; Android store AAB, `1.0.19` / code `23`, commit `895469e`; upload certificate SHA-1/SHA-256 exactly matched Play Console |
 | Real User + Host camera/call test | BLOCKED | No connected authenticated test devices/accounts/Agora test evidence |
 | Live Google Play test purchase / RTDN | BLOCKED | No license-tester purchase or configured proof |
 | Live Stripe Checkout / webhook | BLOCKED | Catalog is unavailable for web Stripe products |
@@ -75,7 +75,7 @@
 | Stripe Checkout | FAIL | NOT APPLICABLE | PARTIAL | PARTIAL | Web catalog reported all products unavailable | FAIL |
 | Stripe webhook/refund lifecycle | BLOCKED | NOT APPLICABLE | PARTIAL | PARTIAL | No configured live webhook evidence | BLOCKED |
 | Admin payment / wallet visibility | NOT APPLICABLE | NOT APPLICABLE | PARTIAL | PARTIAL | Admin production build only | BLOCKED |
-| Android release signing | PARTIAL | BLOCKED | NOT APPLICABLE | NOT APPLICABLE | EAS signed candidate is still in progress; local debug AAB is explicitly rejected | BLOCKED |
+| Android release signing | PASS | NOT APPLICABLE | NOT APPLICABLE | NOT APPLICABLE | EAS AAB signature and both upload-certificate fingerprints verified exactly | PASS |
 | Privacy policy / account deletion | FAIL | NOT APPLICABLE | PARTIAL | NOT APPLICABLE | No root route found | FAIL |
 | Deployment availability | PARTIAL | PARTIAL | PARTIAL | PARTIAL | User site HTTP 200; API first timed out then health passed | PARTIAL |
 
@@ -128,20 +128,15 @@
 
 ### Critical
 
-1. **Release-candidate signing verification is pending**
-   - The local `app-release.aab` is debug signed and is explicitly excluded from release use.
-   - EAS is building a store AAB with managed remote credentials for code `23`; its artifact has not yet completed or been fingerprint-verified.
-   - **Required resolution:** On completion, verify the AAB package/version and SHA-1/SHA-256 against Play Console before any upload.
-
-2. **No live callable Host**
+1. **No live callable Host**
    - API health showed `onlineHosts: 0`, `readyHosts: 0`; `GET /api/hosts` returned an empty list.
    - **Required resolution:** Bring up authenticated, approved Host presence and test the full User-to-Host flow on two devices.
 
-3. **Web Stripe Checkout is unavailable**
+2. **Web Stripe Checkout is unavailable**
    - `GET /api/payments/catalog?platform=web` returned all coins/VIP products with `available: false` and no prices.
    - **Required resolution:** Securely configure Stripe secret/webhook keys and the current Stripe Price IDs on the backend deployment, register the verified webhook endpoint, then test using Stripe test mode. Do not place keys in the app or repository.
 
-4. **Real-money / real-device test gate has not been met**
+3. **Real-money / real-device test gate has not been met**
    - No evidence exists for two-device call media, reconnect, backend billing, gift transfer, live-lock charge, actual Google Play test purchase, refund, RTDN, or Stripe webhook.
    - **Required resolution:** Execute controlled license-tester and Stripe sandbox scenarios; reconcile every resulting server ledger entry against wallet balances.
 
