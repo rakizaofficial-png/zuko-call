@@ -248,6 +248,7 @@ true;`);
       sku?: string;
       purchaseToken?: string;
       productType?: string;
+      accountId?: string;
     }) => {
       try {
         if (data.type === "ZUKO_IAP_PRODUCTS") {
@@ -266,6 +267,7 @@ true;`);
 
         if (data.type === "ZUKO_IAP_PURCHASE") {
           const productId = String(data.sku || "").trim();
+          const accountId = String(data.accountId || "").trim();
           const isSubscription = data.productType === "subs" || IAP_SUBSCRIPTION_IDS.includes(productId);
           if (![...IAP_PRODUCT_IDS, ...IAP_SUBSCRIPTION_IDS].includes(productId)) {
             throw new Error(`Unknown Google Play product: ${productId}`);
@@ -289,9 +291,16 @@ true;`);
               ? subscription.subscriptionOffers.find((offer) => offer.offerTokenAndroid)?.offerTokenAndroid
               : undefined;
             if (!offerToken) throw new Error("No eligible Google Play subscription offer is available.");
-            await requestPurchase({ request: { google: { skus: [productId], subscriptionOffers: [{ sku: productId, offerToken }] } }, type: "subs" });
+            await requestPurchase({ request: { google: {
+              skus: [productId],
+              subscriptionOffers: [{ sku: productId, offerToken }],
+              ...(accountId ? { obfuscatedAccountId: accountId } : {}),
+            } }, type: "subs" });
           } else {
-            await requestPurchase({ request: { google: { skus: [productId] } }, type: "in-app" });
+            await requestPurchase({ request: { google: {
+              skus: [productId],
+              ...(accountId ? { obfuscatedAccountId: accountId } : {}),
+            } }, type: "in-app" });
           }
           return;
         }
@@ -332,7 +341,15 @@ true;`);
           if (!purchase) {
             throw new Error("Verified purchase was not found on this device.");
           }
-          await finishTransaction({ purchase, isConsumable: !IAP_SUBSCRIPTION_IDS.includes(purchase.productId) });
+          try {
+            await finishTransaction({ purchase, isConsumable: !IAP_SUBSCRIPTION_IDS.includes(purchase.productId) });
+          } catch (error) {
+            // The backend already consumed/acknowledged the verified Play
+            // purchase. Treat only Play's duplicate-settlement responses as a
+            // successful local cleanup; any other failure remains visible.
+            const detail = error instanceof Error ? error.message : String(error);
+            if (!/(already|consum|acknowledg|not[ _-]?owned)/i.test(detail)) throw error;
+          }
           pendingPurchasesRef.current.delete(purchaseToken);
         }
       } catch (error) {
@@ -496,12 +513,12 @@ true;`);
   } catch (e) {}
   var nativeIap = window.ZukoNativeIap || window.LumaNativeIap || {
     isNativeGooglePlay: true,
-    purchase: function(sku, productType){
+    purchase: function(sku, productType, accountId){
       return new Promise(function(resolve, reject){
         try {
           if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
             window.__ZUKO_IAP_CB__ = { resolve: resolve, reject: reject, sku: sku };
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_PURCHASE', sku: sku, productType: productType || 'in-app' }));
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ZUKO_IAP_PURCHASE', sku: sku, productType: productType || 'in-app', accountId: accountId || '' }));
           } else { reject(new Error('Native bridge unavailable')); }
         } catch (err) { reject(err); }
       });

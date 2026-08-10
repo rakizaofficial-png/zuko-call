@@ -16,7 +16,7 @@
  */
 
 import { requireApiBase } from "@/config/apiConfig";
-import { getAuthHeaders } from "@/lib/authSession";
+import { getAuthHeaders, getSession } from "@/lib/authSession";
 import { getDeviceUserId } from "@/lib/walletApi";
 import { getIapProduct, isKnownIapProduct } from "./iapCatalog";
 import { markTxCompleted, recordPendingTx } from "@/lib/coinLedger";
@@ -36,6 +36,20 @@ type PaymentApiTransaction = {
   walletBalance: number;
   coinsGranted: number;
 };
+
+type GoogleVerifyResponse =
+  | { ok: true; transaction: PaymentApiTransaction }
+  | { ok: false; pending?: boolean; error?: string; message?: string };
+
+function billingAccountId(): string {
+  const id = String(getSession()?.user?.id || "").trim();
+  // The same authenticated account identifier is attached to the Play purchase
+  // and validated again by the backend. Device-only identities cannot buy.
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(id)) {
+    throw new Error("Sign in to your Zuko account before making a purchase.");
+  }
+  return id;
+}
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = requireApiBase();
@@ -90,13 +104,19 @@ export async function verifyIapPurchase(input: {
   if (!isKnownIapProduct(input.productId) && !['luma_vip_week', 'luma_vip_month', 'luma_vip_year'].includes(input.productId)) {
     throw new Error(`Unknown productId: ${input.productId}`);
   }
-  const result = await apiJson<{ ok: boolean; transaction: PaymentApiTransaction }>("/payments/google/verify", {
+  const result = await apiJson<GoogleVerifyResponse>("/payments/google/verify", {
     method: "POST",
     body: JSON.stringify({
       productId: input.productId,
       purchaseToken: input.purchaseToken,
     }),
   });
+  if (!result.ok || !('transaction' in result)) {
+    if (result.pending) {
+      throw new Error("Your Google Play payment is pending. Coins will be added after Google confirms it.");
+    }
+    throw new Error(result.message || result.error || "Google Play could not verify this purchase.");
+  }
   return {
     ok: result.ok,
     balance: result.transaction.walletBalance,
@@ -256,15 +276,13 @@ export async function purchaseCoins(input: {
   userId: string;
   productId: string;
 }): Promise<VerifyIapResult | { redirected: true; checkoutUrl: string }> {
-  /** Always credit the device profile id — never a random/temp id */
-  const userId = getDeviceUserId() || input.userId;
-  if (!userId) throw new Error("Profile not ready — reopen the app");
+  const userId = billingAccountId();
 
   const nativeWindow = window as unknown as {
     __ZUKO_ANDROID__?: number;
     ZukoNativeIap?: {
       isNativeGooglePlay?: boolean;
-      purchase: (sku: string) => Promise<{
+      purchase: (sku: string, type?: "in-app" | "subs", accountId?: string) => Promise<{
         platform: IapPlatform;
         productId?: string;
         purchaseToken: string;
@@ -273,7 +291,7 @@ export async function purchaseCoins(input: {
     };
     LumaNativeIap?: {
       isNativeGooglePlay?: boolean;
-      purchase: (sku: string) => Promise<{
+      purchase: (sku: string, type?: "in-app" | "subs", accountId?: string) => Promise<{
         platform: IapPlatform;
         productId?: string;
         purchaseToken: string;
@@ -288,7 +306,7 @@ export async function purchaseCoins(input: {
   if (bridge?.purchase) {
     const product = getIapProduct(input.productId);
     if (!product) throw new Error("Unknown product");
-    const native = await bridge.purchase(product.platformSku.google);
+    const native = await bridge.purchase(product.platformSku.google, "in-app", userId);
     if (native?.purchaseToken) {
       const txId = `tx_iap_${input.productId}_${native.purchaseToken.slice(0, 24)}`;
       recordPendingTx({
@@ -346,19 +364,20 @@ export async function purchaseVip(productId: string): Promise<VerifyIapResult | 
   const nativeWindow = window as unknown as {
     __ZUKO_ANDROID__?: number;
     ZukoNativeIap?: {
-      purchase: (sku: string, type?: "subs") => Promise<{ platform: IapPlatform; purchaseToken: string }>;
+      purchase: (sku: string, type?: "in-app" | "subs", accountId?: string) => Promise<{ platform: IapPlatform; purchaseToken: string }>;
       finish?: (purchaseToken: string) => Promise<void>;
     };
   };
   if (nativeWindow.ZukoNativeIap?.purchase) {
-    const purchase = await nativeWindow.ZukoNativeIap.purchase(productId, "subs");
-    const verified = await verifyIapPurchase({ userId: getDeviceUserId(), productId,
+    const userId = billingAccountId();
+    const purchase = await nativeWindow.ZukoNativeIap.purchase(productId, "subs", userId);
+    const verified = await verifyIapPurchase({ userId, productId,
       platform: purchase.platform || "google", purchaseToken: purchase.purchaseToken });
     await nativeWindow.ZukoNativeIap.finish?.(purchase.purchaseToken);
     return verified;
   }
   if (nativeWindow.__ZUKO_ANDROID__) throw new Error("Google Play Billing is unavailable. External checkout is disabled in the Play build.");
-  const session = await createIapCheckoutSession({ userId: getDeviceUserId(), productId, platform: "web" });
+  const session = await createIapCheckoutSession({ userId: billingAccountId(), productId, platform: "web" });
   window.location.href = session.checkoutUrl;
   return { redirected: true, checkoutUrl: session.checkoutUrl };
 }
