@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock3, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import {
   buildPaywallTiers,
   type WelcomePushHost,
 } from "@/lib/welcomePush/config";
+import { getLocalizedIapProducts } from "@/lib/payments/iapCatalog";
 import { purchaseCoins } from "@/lib/payments/iap";
 import { useApp } from "@/lib/store";
 
@@ -25,28 +26,41 @@ export function RechargePaywallSheet({
   offerLeft: number;
   onClose: () => void;
 }) {
-  const { userId, pushToast, syncWallet, setPremium } = useApp();
+  const { userId, pushToast, syncWallet } = useApp();
   const [busy, setBusy] = useState(false);
+  const [localizedPrices, setLocalizedPrices] = useState<Record<string, string>>({});
   const tiers = buildPaywallTiers(host.name);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void getLocalizedIapProducts()
+      .then((products) => {
+        if (!active) return;
+        setLocalizedPrices(
+          Object.fromEntries(products.map((product) => [product.productId, product.priceLabel])),
+        );
+      })
+      .catch(() => {
+        // Keep the provider-neutral "Store price" label if Billing is not
+        // available yet. Never show a fabricated local price.
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   const buy = async (tier: (typeof tiers)[number]) => {
     if (!userId) {
       pushToast("Wallet not ready");
       return;
     }
-    const productMap: Record<string, string> = {
-      unlock_5: "luma_coins_50",
-      popular_50: "luma_coins_50",
-      boost_300: "luma_coins_500",
-    };
-    const productId = productMap[tier.id] || "luma_coins_50";
     setBusy(true);
     pushToast("Opening Google Play checkout…");
     try {
-      const result = await purchaseCoins({ userId, productId });
+      const result = await purchaseCoins({ userId, productId: tier.id });
       if ("redirected" in result) return;
       await syncWallet();
-      if (tier.id === "boost_300") setPremium(true);
       pushToast(`You’re back — call ${host.name} now`);
       onClose();
     } catch (e: unknown) {
@@ -142,7 +156,7 @@ export function RechargePaywallSheet({
                     </p>
                   </div>
                   <span className="font-display text-xl font-extrabold">
-                    {tier.price}
+                    {localizedPrices[tier.id] || tier.price}
                   </span>
                 </motion.button>
               ))}

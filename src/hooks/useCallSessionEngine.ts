@@ -227,8 +227,6 @@ export function useCallSessionEngine(opts: {
           if (!localRef.current || !remoteRef.current) {
             throw new Error("Video surface missing — allow camera");
           }
-          setState("CONNECTED");
-          await sleep(100);
           await startUserAgoraCall({
             appId: token.appId,
             channel: token.channel,
@@ -240,6 +238,10 @@ export function useCallSessionEngine(opts: {
           });
           await reportRtcConnected(accepted.id, accepted.userId);
           if (cancelledRef.current) return;
+          // Do not expose a connected call (or let downstream billing start)
+          // until local RTC join/media publish and the server acknowledgement
+          // have both succeeded.
+          setState("CONNECTED");
           setStatusText(`Connected with ${host.name}`);
           onConnectedRef.current?.({
             transport: "agora_live",
@@ -384,8 +386,6 @@ export function useCallSessionEngine(opts: {
             throw new Error("Video surface missing — allow camera");
           }
 
-          setState("CONNECTED");
-          await sleep(100);
           await startUserAgoraCall({
             appId: token.appId,
             channel: token.channel,
@@ -397,6 +397,10 @@ export function useCallSessionEngine(opts: {
           });
           await reportRtcConnected(accepted.id, getDeviceUserId());
           if (cancelledRef.current) return;
+          // Billing/UI consumers key off CONNECTED. Set it only after the
+          // camera/microphone tracks joined and the backend accepted this
+          // participant's RTC-connected signal.
+          setState("CONNECTED");
           setStatusText(`Connected with ${host.name}`);
           onConnectedRef.current?.({ transport: "agora_live", name: host.name });
           return;

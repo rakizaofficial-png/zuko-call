@@ -4,6 +4,7 @@
  */
 
 import type { WelcomePaywallTier, WelcomePushHost } from "./types";
+import { IAP_PRODUCTS } from "@/lib/payments/iapCatalog";
 
 export type {
   WelcomePushPhase,
@@ -41,33 +42,37 @@ export const WELCOME_PUSH_HOST: WelcomePushHost = {
 };
 
 export function buildPaywallTiers(hostName: string): WelcomePaywallTier[] {
-  return [
+  const copy = [
     {
-      id: "unlock_5",
-      headline: "Keep talking to her",
-      sub: `${hostName} is still on the line · unlock 5 mins`,
-      coins: 50,
-      price: "$1.00",
-      neon: "green",
+      headline: "Keep talking",
+      sub: `${hostName} is still on the line`,
+      neon: "green" as const,
     },
     {
-      id: "popular_50",
-      headline: "Most chosen · 50 Coins",
+      headline: "Most chosen",
       sub: `Jump back to ${hostName} before she leaves`,
-      coins: 50,
-      price: "$0.99",
-      neon: "pink",
-      popular: true,
+      neon: "pink" as const,
     },
     {
-      id: "boost_300",
-      headline: "Stay longer · 300 Coins",
-      sub: "Private VIP minutes · she won’t wait forever",
-      coins: 300,
-      price: "$4.99",
-      neon: "gold",
+      headline: "Stay longer",
+      sub: "More coins for private calls and gifts",
+      neon: "gold" as const,
     },
   ];
+
+  // Keep the conversion sheet aligned with the only coin products offered by
+  // the current Play/Stripe catalog. Provider dashboards remain authoritative
+  // for price; `priceLabel` is replaced with Google Play's localized value in
+  // the native shell when available.
+  return IAP_PRODUCTS.map((product, index) => ({
+    id: product.productId,
+    headline: `${copy[index]!.headline} · ${product.coins.toLocaleString()} Coins`,
+    sub: copy[index]!.sub,
+    coins: product.coins + product.bonusCoins,
+    price: product.priceLabel,
+    neon: copy[index]!.neon,
+    popular: product.popular,
+  }));
 }
 
 /** Static fallback tiers (prefer buildPaywallTiers) */

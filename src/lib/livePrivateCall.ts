@@ -127,24 +127,10 @@ export async function refundCallReserve(input: {
     markTxCompleted(txId);
   } catch (e) {
     markTxRolledBack(txId, e instanceof Error ? e.message : "refund failed");
-    // Best-effort alternate endpoint
-    try {
-      await fetch(`${requireApiBase()}/wallet/credit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Id": userId,
-        },
-        body: JSON.stringify({
-          userId,
-          amount: input.amount,
-          reason: `live_call_refund_${input.callId}`,
-          clientTxId: txId,
-        }),
-      });
-    } catch {
-      /* server may auto-release unpaid reserves */
-    }
+    // The backend reservation/refund ledger is the only coin authority.
+    // Do not attempt a second client-originated credit when it is unavailable;
+    // the failed local entry is retained for reconciliation on the next wallet
+    // refresh or server-side recovery job.
   }
 }
 

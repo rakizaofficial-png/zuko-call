@@ -37,8 +37,6 @@ import {
   markTxFailed,
   recordPendingTx,
 } from "@/lib/coinLedger";
-import { transferCallMinuteFb } from "@/lib/firebaseWallet";
-import { isFirebaseReady } from "@/lib/firebase";
 import { effectiveRate, maxCallMinutes } from "@/lib/ledger";
 import { saveLivePrivateCallHistory } from "@/lib/livePrivateCall";
 import { useApp } from "@/lib/store";
@@ -79,7 +77,6 @@ export default function CallSessionClient({
     endFreeTrial,
     completeCallEngagement,
     completeGiftEngagement,
-    displayName: myDisplayName,
     applyLocalCoins,
     openTopUp,
   } = useApp();
@@ -375,37 +372,16 @@ export default function CallSessionClient({
         await exhaustRef.current("Insufficient balance for first minute");
         return;
       }
-      if (isFirebaseReady()) {
-        const fb = await transferCallMinuteFb({
-          userId: getDeviceUserId(),
-          hostId: hostIdForBill,
-          amount: prepaid,
-          callId: sid,
-          minuteIndex: 0,
-          userName: myDisplayName,
-          hostName: displayName,
-        });
-        if (fb.ok) {
-          markTxCompleted(txId);
-          coinsSpentRef.current += fb.amount ?? prepaid;
-          setCoinsSpentUi(coinsSpentRef.current);
-          setDeductFlash(fb.amount ?? prepaid);
-          setTimeout(() => setDeductFlash(null), 900);
-          pushFeed(`−${fb.amount ?? prepaid} coins · 1st min`, "bill");
-          if (typeof fb.userBalance === "number") {
-            applyLocalCoins(fb.userBalance);
-          }
-          return;
-        }
-        if (fb.exhausted) {
-          markTxFailed(txId, "exhausted");
-          await exhaustRef.current("Insufficient balance for first minute");
-          return;
-        }
-      }
+      // The Express payment/call ledger is the only financial authority.
+      // Never fall back to a client-operated Firebase transfer: that could
+      // create an untracked debit/credit pair when the authoritative request
+      // timed out or failed.
       markTxFailed(txId, expr.error || "first minute billing failed");
-      pushToastRef.current(expr.error || "Could not bill first minute");
-      await exhaustRef.current();
+      await syncWallet?.().catch(() => undefined);
+      pushToastRef.current(
+        expr.error || "Unable to verify the first-minute charge. The call ended safely.",
+      );
+      await hangUpRef.current({ reason: "billing_verification_failed" });
     })();
   }, [
     isConnected,
@@ -420,8 +396,6 @@ export default function CallSessionClient({
     id,
     syncWallet,
     applyLocalCoins,
-    myDisplayName,
-    displayName,
   ]);
 
   // Legacy reserved=1 clients: UI-only prepaid window (already spent)
@@ -599,28 +573,13 @@ export default function CallSessionClient({
               } else if (expr.exhausted) {
                 markTxFailed(txId, expr.error || "exhausted");
                 await exhaustRef.current();
-              } else if (isFirebaseReady() && userId && hostIdForBill) {
-                const fb = await transferCallMinuteFb({
-                  userId,
-                  hostId: hostIdForBill,
-                  amount: chargeNow,
-                  callId: billSessionId,
-                  minuteIndex,
-                  userName: myDisplayName,
-                  hostName: displayName,
-                });
-                if (fb.ok) {
-                  onMinuteBilled(fb.amount ?? chargeNow, fb.userBalance);
-                } else if (fb.exhausted) {
-                  markTxFailed(txId, "exhausted");
-                  await exhaustRef.current();
-                } else {
-                  markTxFailed(txId, fb.error || "billing failed");
-                  pushToast(fb.error || "Billing failed");
-                }
               } else {
                 markTxFailed(txId, expr.error || "billing failed");
-                pushToast(expr.error || "Billing failed");
+                await syncWallet?.().catch(() => undefined);
+                pushToast(
+                  expr.error || "Unable to verify the minute charge. The call ended safely.",
+                );
+                await hangUpRef.current({ reason: "billing_verification_failed" });
               }
             } else {
               const ok = await spendAsync(chargeNow, `−${chargeNow} coins · 1 min`, {
@@ -664,8 +623,6 @@ export default function CallSessionClient({
     sessionId,
     liveHost?.id,
     aiHost?.host_id,
-    myDisplayName,
-    displayName,
     applyLocalCoins,
   ]);
 
