@@ -22,7 +22,7 @@
 - Removed Firebase minute-transfer fallback from the User call screen. A failed authoritative billing request now ends the call safely instead of trying a client-side debit/credit.
 - Removed the direct client `/wallet/credit` alternate fallback from a live-call reserve refund helper.
 - Confirmed User app production web build and TypeScript checks pass.
-- Confirmed Android configuration is `com.zuko.user`, version `1.0.19`, with `CAMERA`, `RECORD_AUDIO`, and Play Billing permission. EAS remote versioning has queued the release candidate as version code `23`.
+- Confirmed Android configuration is `com.zuko.user`, version `1.0.19`, with `CAMERA`, `RECORD_AUDIO`, and Play Billing permission. EAS remote versioning built the release candidate as version code `23`.
 - Produced and verified the release-candidate AAB using the exact Google Play upload certificate.
 - Queried deployed User/API endpoints and payment catalog without making any production mutation.
 
@@ -142,38 +142,38 @@
 
 ### High
 
-5. **Legacy client financial and identity surfaces remain**
+4. **Legacy client financial and identity surfaces remain**
    - `src/lib/walletApi.ts` still exposes client-side credit/premium requests; `src/lib/livePrivateCall.ts` still invokes server refund request; session/device IDs are sent in client headers/body.
    - **Required resolution:** Backend must derive the principal from a verified bearer/Firebase session, ignore request-body user IDs/prices/coin amounts, and enforce idempotency/role ownership server-side.
 
-6. **Legacy Firebase/AI paths remain in the production source**
+5. **Legacy Firebase/AI paths remain in the production source**
    - `src/lib/firebaseWallet.ts` still defines `transferCallMinuteFb`; `useCallSessionEngine` uses Firebase session helpers; `ai_prerecorded` / `FakeLiveVideoPlayer` remain supported paths.
    - **Required resolution:** Remove or fully isolate these from paid production flows. A prerecorded/demonstration call must never be represented as a live paid Host call.
 
-7. **Financial persistence not proven production-safe**
+6. **Financial persistence not proven production-safe**
    - Health reports `persistence: "mongo+disk"`.
    - **Required resolution:** Make MongoDB replica-set transactions mandatory and fail closed for every wallet, call, gift, refund, and payout mutation; use disk snapshots only for recovery/migration, never as financial authority.
 
-8. **Lint gate still fails outside the repaired call path**
+7. **Lint gate still fails outside the repaired call path**
    - The release-critical call files now pass scoped ESLint, but root lint still has 27 pre-existing React lifecycle errors in unrelated UI/store/welcome files.
    - **Required resolution:** Resolve or formally justify every remaining error before publication.
 
 ### Compliance and release readiness
 
-9. **Privacy Policy and account deletion are missing from the User source**
+8. **Privacy Policy and account deletion are missing from the User source**
    - No `/privacy`, terms, or account-deletion route was found.
    - **Required resolution:** Publish an HTTPS policy and deletion request/fulfillment path, link it in app/settings/store listing, and complete Play Console account-deletion declaration.
 
-10. **Data Safety must be completed from actual behavior**
+9. **Data Safety must be completed from actual behavior**
     - Code indicates collection/processing of email/name/profile/bio, profile/chat photos, chat text, call/live activity, wallet/purchase status, install/device ID, and FCM token. Camera/microphone media is used through Agora.
     - No GPS location collection was found in the User code.
     - **Required resolution:** Declare exact collection, sharing, retention, encryption, and optional/required purpose after confirming backend, Firebase, Agora, Stripe, and Play Billing behavior. Do not claim card/CVV collection; none was found in the User app.
 
-11. **Network security needs a production review**
+10. **Network security needs a production review**
     - The source now configures `usesCleartextTraffic=false` for EAS production builds; the ignored local prebuild still reflects an older development configuration. WebView mixed-content behavior still needs signed-device validation.
     - **Required resolution:** Confirm the finished production manifest and test all HTTPS media/API flows; do not re-enable cleartext without a documented necessity.
 
-12. **API cold-start/reliability risk**
+11. **API cold-start/reliability risk**
     - First health request timed out after 20 seconds; a subsequent retry returned HTTP 200 in 0.54 seconds.
     - **Required resolution:** Add production monitoring, investigate startup latency, and ensure payment/call paths show retry-safe error states without duplicate mutations.
 
@@ -181,4 +181,4 @@
 
 **READY TO PUBLISH: NO**
 
-Do not submit or roll out a Production Play release until all Critical blockers are resolved, an upload-key signed AAB is verified, real device tests pass, Stripe/Google sandbox purchase verification is evidenced, and the backend financial authority is fail-closed and durable.
+Do not submit or roll out a Production Play release until all remaining Critical blockers are resolved, real-device tests pass, Stripe/Google sandbox purchase verification is evidenced, and the backend financial authority is fail-closed and durable.
