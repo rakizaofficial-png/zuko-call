@@ -1,6 +1,13 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import {
+  use,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -73,7 +80,7 @@ export default function CallSessionClient({
     coins,
     syncWallet,
     freeTrialAvailable,
-    useFreeTrial,
+    useFreeTrial: startFreeTrial,
     endFreeTrial,
     completeCallEngagement,
     completeGiftEngagement,
@@ -108,13 +115,8 @@ export default function CallSessionClient({
   const coinsSpentRef = useRef(0);
   const historySavedRef = useRef(false);
   const firstMinuteBilledRef = useRef(false);
-  const reservedFirstMinuteRef = useRef(reservedFirstMinute || billFirstMinute);
-  reservedFirstMinuteRef.current = reservedFirstMinute || billFirstMinute;
-  const openTopUpRef = useRef(openTopUp);
-  openTopUpRef.current = openTopUp;
+  const hasReservedFirstMinute = reservedFirstMinute || billFirstMinute;
   const feedEndRef = useRef<HTMLDivElement>(null);
-  const pushToastRef = useRef(pushToast);
-  pushToastRef.current = pushToast;
   const insufficientExitRef = useRef(false);
 
   function pushFeed(text: string, tone: FeedLine["tone"] = "system") {
@@ -122,15 +124,18 @@ export default function CallSessionClient({
       [...prev, { id: `${Date.now()}_${Math.random()}`, text, tone }].slice(-24),
     );
   }
-  const pushFeedRef = useRef(pushFeed);
-  pushFeedRef.current = pushFeed;
-
   useEffect(() => {
-    if (trialParam && freeTrialAvailable && useFreeTrial()) {
-      setTrialMode(true);
-      pushToastRef.current("Free 30s trial started");
-    }
-  }, [trialParam, freeTrialAvailable, useFreeTrial]);
+    if (!trialParam || !freeTrialAvailable) return;
+    // Schedule after subscription setup so strict-mode effect replay can cancel
+    // the first attempt before it consumes the one-time trial entitlement.
+    const activation = window.setTimeout(() => {
+      if (startFreeTrial()) {
+        setTrialMode(true);
+        pushToast("Free 30s trial started");
+      }
+    }, 0);
+    return () => window.clearTimeout(activation);
+  }, [trialParam, freeTrialAvailable, startFreeTrial, pushToast]);
 
   useEffect(() => {
     const readNet = () => {
@@ -160,7 +165,7 @@ export default function CallSessionClient({
   useEffect(() => {
     if (netQuality === "Low" && !lowNetWarnedRef.current) {
       lowNetWarnedRef.current = true;
-      pushToastRef.current("Low network — video quality may drop");
+      pushToast("Low network — video quality may drop");
     }
     if (netQuality === "Excellent" || netQuality === "Good") {
       lowNetWarnedRef.current = false;
@@ -174,8 +179,8 @@ export default function CallSessionClient({
     audioOnly,
     preAcceptedCallId,
     onConnected: ({ transport, name }) => {
-      pushFeedRef.current(`Connected with ${name}`, "system");
-      pushToastRef.current(
+      pushFeed(`Connected with ${name}`, "system");
+      pushToast(
         transport === "ai_prerecorded"
           ? `${name} · preview host (AI clip) while live hosts are busy`
           : fromLive
@@ -188,11 +193,11 @@ export default function CallSessionClient({
       }
     },
     onFailed: (message) => {
-      pushToastRef.current(message);
+      pushToast(message);
       if (/insufficient balance|insufficient coins|recharge/i.test(message)) {
         insufficientExitRef.current = true;
         // Global TopUpSheet survives navigation — do not rely on local modal.
-        openTopUpRef.current(30, "Insufficient Coins — recharge to place a call.");
+        openTopUp(30, "Insufficient Coins — recharge to place a call.");
       }
     },
   });
@@ -230,8 +235,8 @@ export default function CallSessionClient({
         /* ignore */
       }
       if (cancelled) return;
-      pushToastRef.current("Insufficient Coins");
-      openTopUpRef.current(30, "Insufficient Coins — recharge to place a call.");
+      pushToast("Insufficient Coins");
+      openTopUp(30, "Insufficient Coins — recharge to place a call.");
       router.replace("/call");
     })();
     return () => {
@@ -253,6 +258,12 @@ export default function CallSessionClient({
     !isAi && bridgeCall?.ratePerMinute
       ? Math.max(1, Math.floor(bridgeCall.ratePerMinute))
       : rate;
+  const getBillingSnapshot = useEffectEvent(() => ({
+    coins,
+    chargeRate,
+    trialMode,
+    hasReservedFirstMinute,
+  }));
 
   const hangUp = async (opts?: { reason?: string; skipNavigate?: boolean }) => {
     setEndingOverlay(true);
@@ -263,7 +274,7 @@ export default function CallSessionClient({
     persistLiveHistory(
       opts?.reason === "insufficient_coins" ||
         (coinsSpentRef.current > 0 &&
-          coinsRef.current < chargeRateRef.current)
+          coins < chargeRate)
         ? "insufficient"
         : "ended",
     );
@@ -285,7 +296,7 @@ export default function CallSessionClient({
       durationSec: secsRef.current,
       coinsSpent: coinsSpentRef.current,
       status,
-      ratePerMinute: chargeRateRef.current || chargeRate,
+      ratePerMinute: chargeRate,
     });
   };
 
@@ -293,29 +304,19 @@ export default function CallSessionClient({
     hangUpRef.current = hangUp;
   });
 
-  const coinsRef = useRef(coins);
-  const trialModeRef = useRef(trialMode);
-  const chargeRateRef = useRef(chargeRate);
   const secsRef = useRef(0);
-  useEffect(() => {
-    coinsRef.current = coins;
-  }, [coins]);
-  useEffect(() => {
-    trialModeRef.current = trialMode;
-  }, [trialMode]);
-  useEffect(() => {
-    chargeRateRef.current = chargeRate;
-  }, [chargeRate]);
 
   /** Coins gone → open recharge + hang up cleanly (both sides leave) */
   const exhaustAndRecharge = useCallback(async (msg?: string) => {
     setLowBalanceOpen(true);
-    openTopUpRef.current(30);
-    pushToastRef.current(msg || "Coins exhausted — recharge to continue");
+    openTopUp(30);
+    pushToast(msg || "Coins exhausted — recharge to continue");
     await hangUpRef.current({ reason: "insufficient_coins" });
-  }, []);
+  }, [openTopUp, pushToast]);
   const exhaustRef = useRef(exhaustAndRecharge);
-  exhaustRef.current = exhaustAndRecharge;
+  useEffect(() => {
+    exhaustRef.current = exhaustAndRecharge;
+  }, [exhaustAndRecharge]);
 
   // Live→call: bill first minute through /calls/:id/minute so host is credited
   useEffect(() => {
@@ -378,7 +379,7 @@ export default function CallSessionClient({
       // timed out or failed.
       markTxFailed(txId, expr.error || "first minute billing failed");
       await syncWallet?.().catch(() => undefined);
-      pushToastRef.current(
+      pushToast(
         expr.error || "Unable to verify the first-minute charge. The call ended safely.",
       );
       await hangUpRef.current({ reason: "billing_verification_failed" });
@@ -438,7 +439,6 @@ export default function CallSessionClient({
     if (!isConnected) return;
 
     secsRef.current = 0;
-    setSecs(0);
 
     const tick = setInterval(() => {
       // Never call pushToast / other store updates inside a setState updater —
@@ -447,9 +447,12 @@ export default function CallSessionClient({
       secsRef.current = next;
       setSecs(next);
 
-      const bal = coinsRef.current;
-      const charge = chargeRateRef.current;
-      const trial = trialModeRef.current;
+      const {
+        coins: bal,
+        chargeRate: charge,
+        trialMode: trial,
+        hasReservedFirstMinute: prepaid,
+      } = getBillingSnapshot();
 
       if (trial && !trialEndedRef.current && next >= FREE_TRIAL_SECONDS) {
         trialEndedRef.current = true;
@@ -485,7 +488,7 @@ export default function CallSessionClient({
       ) {
         lowBalanceWarnedRef.current = true;
         setLowBalanceOpen(true);
-        openTopUpRef.current(30);
+        openTopUp(30);
         pushToast(
           "Your balance is running low. Please recharge to continue the call.",
         );
@@ -494,7 +497,7 @@ export default function CallSessionClient({
       // Strict: cannot afford host rate → disconnect both sides + recharge
       // Prepaid first minute from Live covers seconds 1–60 even if balance is 0.
       const prepaidWindow =
-        reservedFirstMinuteRef.current && next > 0 && next < 60;
+        prepaid && next > 0 && next < 60;
       if (bal < charge && next > 2 && !prepaidWindow) {
         void exhaustRef.current("Insufficient balance, please recharge");
         return;
@@ -509,8 +512,8 @@ export default function CallSessionClient({
             const hostIdForBill =
               bridgeCall?.hostId || liveHost?.id || aiHost?.host_id || id;
             const billSessionId = sessionId || bridgeCall?.id || `ai_${id}`;
-            const chargeNow = chargeRateRef.current;
-            const coinsNow = coinsRef.current;
+            const { chargeRate: chargeNow, coins: coinsNow } =
+              getBillingSnapshot();
 
             // next=60 → minuteIndex 1 (second minute). Minute 0 was prepaid via reserve.
             const minuteIndex = Math.floor(next / 60);
@@ -568,7 +571,7 @@ export default function CallSessionClient({
                 await syncWallet?.();
                 onMinuteBilled(
                   expr.amount ?? chargeNow,
-                  expr.coinBalance ?? coinsRef.current,
+                  expr.coinBalance ?? getBillingSnapshot().coins,
                 );
               } else if (expr.exhausted) {
                 markTxFailed(txId, expr.error || "exhausted");
@@ -639,7 +642,7 @@ export default function CallSessionClient({
           durationSec: secsRef.current,
           coinsSpent: coinsSpentRef.current,
           status: "ended",
-          ratePerMinute: chargeRateRef.current || chargeRate,
+          ratePerMinute: chargeRate,
         });
       }
       router.push(fromLive ? "/live" : "/call");
