@@ -34,7 +34,13 @@ export type WalletSnapshot = {
 };
 
 function deviceUserId(): string {
-  return ensureDeviceUserId();
+  // Once signed in, every protected wallet/call request must use the account
+  // identity issued by CoinCall.  A previously generated anonymous device id
+  // is only a pre-login bootstrap identity; mixing it with a bearer session
+  // makes the request fail authorization and leaves the UI on a false zero
+  // balance.
+  const accountId = getSession()?.user?.id?.trim();
+  return accountId || ensureDeviceUserId();
 }
 
 export function getDeviceUserId() {
@@ -69,6 +75,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
  */
 export async function fetchOrCreateWallet(): Promise<WalletSnapshot> {
   const local = ensureLocalProfile();
+  const accountUserId = deviceUserId();
   const data = await api<{
     wallet: WalletSnapshot;
     created?: boolean;
@@ -78,11 +85,11 @@ export async function fetchOrCreateWallet(): Promise<WalletSnapshot> {
   }>("/wallet/me", {
     method: "POST",
     body: JSON.stringify({
-      userId: local.userId,
+      userId: accountUserId,
       displayName: local.displayName,
       avatarUrl: local.avatarUrl,
       bio: local.bio || "",
-      welcomeAlreadyClaimed: hasWelcomeBonusClaimed(local.userId),
+      welcomeAlreadyClaimed: hasWelcomeBonusClaimed(accountUserId),
       installId: ensureInstallId(),
     }),
   });
@@ -120,7 +127,7 @@ export async function fetchOrCreateWallet(): Promise<WalletSnapshot> {
     void api("/wallet/me", {
       method: "POST",
       body: JSON.stringify({
-        userId: wallet.userId || local.userId,
+        userId: accountUserId,
         displayName: local.displayName,
         avatarUrl: local.avatarUrl,
         bio: local.bio || "",
@@ -157,7 +164,7 @@ export async function updateProfileName(
   const data = await api<{ wallet: WalletSnapshot }>("/wallet/me", {
     method: "POST",
     body: JSON.stringify({
-      userId: local.userId,
+      userId: deviceUserId(),
       displayName: local.displayName,
       avatarUrl: local.avatarUrl,
       bio: local.bio || "",
@@ -175,7 +182,7 @@ export async function updateProfileAvatar(
   const data = await api<{ wallet: WalletSnapshot }>("/wallet/me", {
     method: "POST",
     body: JSON.stringify({
-      userId: local.userId,
+      userId: deviceUserId(),
       displayName: local.displayName,
       avatarUrl: local.avatarUrl,
       bio: local.bio || "",
@@ -191,7 +198,7 @@ export async function updateProfileBio(bio: string): Promise<WalletSnapshot> {
   const data = await api<{ wallet: WalletSnapshot }>("/wallet/me", {
     method: "POST",
     body: JSON.stringify({
-      userId: local.userId,
+      userId: deviceUserId(),
       displayName: local.displayName,
       avatarUrl: local.avatarUrl,
       bio: local.bio || "",
@@ -221,6 +228,7 @@ export async function uploadProfileAvatar(
         "Content-Type": "application/json",
         "X-User-Id": userId,
         "X-Install-Id": ensureInstallId(),
+        ...getAuthHeaders(),
       },
       body: JSON.stringify({ image: dataUrl }),
       cache: "no-store",
