@@ -231,7 +231,9 @@ export default function ProfilePage() {
   }, [ready, userId, coins, displayName]);
 
   const pack = products.find((p) => p.productId === selected) || products[0];
-  const topPacks = products.slice(0, 4);
+  // Keep the profile recharge view in lockstep with the authoritative catalogue.
+  // Hiding the two high-value tiers made $50/$100 purchases look unavailable.
+  const topPacks = products;
   const coinsSpentTotal = callRows.reduce((n, c) => n + (c.coinsSpent || 0), 0);
   const callCount = callRows.length;
   const coinTxCount = coinRows.length || engagement.coinHistory.length;
