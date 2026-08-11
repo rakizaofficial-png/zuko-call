@@ -66,7 +66,9 @@ export function buildPaywallTiers(hostName: string): WelcomePaywallTier[] {
   // the native shell when available.
   // This sheet may be shown inside the Android Play build. Web-only card
   // packages belong in the web recharge sheet, not in this Play checkout UI.
-  return IAP_PRODUCTS.filter((product) => !product.webOnly).map((product, index) => ({
+  // The compact welcome modal deliberately shows three entry options; the
+  // regular recharge sheet exposes every active package.
+  return IAP_PRODUCTS.filter((product) => !product.webOnly).slice(0, 3).map((product, index) => ({
     id: product.productId,
     headline: `${copy[index]!.headline} · ${product.coins.toLocaleString()} Coins`,
     sub: copy[index]!.sub,

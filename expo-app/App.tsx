@@ -64,9 +64,12 @@ const TRANSIENT_HTTP = new Set([502, 503, 504]);
 const MAX_AUTO_RETRIES = 4;
 const INSTALL_FILE = `${FileSystem.documentDirectory || ""}zuko_install_id.txt`;
 const IAP_PRODUCT_IDS = [
-  "zuko_coins_90",
+  "zuko_coins_99",
   "zuko_coins_600",
   "zuko_coins_1300",
+  "zuko_coins_3000",
+  "zuko_coins_8500",
+  "zuko_coins_20000",
 ];
 const IAP_SUBSCRIPTION_IDS = ["luma_vip_week", "luma_vip_month", "luma_vip_year"];
 

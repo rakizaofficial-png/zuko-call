@@ -151,7 +151,7 @@ export function TopUpSheet({
                     ) : null}
                     {tier.best ? (
                       <span className="absolute right-2 top-2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                        Best
+                        Best value
                       </span>
                     ) : null}
                     <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold/15 text-gold">
@@ -170,6 +170,11 @@ export function TopUpSheet({
                         ? ` · +${tier.bonusCoins} bonus`
                         : ""}
                     </p>
+                    {tier.valueLabel ? (
+                      <p className="mt-0.5 text-[10px] font-semibold text-emerald-300">
+                        {tier.valueLabel}
+                      </p>
+                    ) : null}
                     <p className="mt-1 font-display text-sm font-bold text-cyan">
                       {tier.priceLabel}
                     </p>
