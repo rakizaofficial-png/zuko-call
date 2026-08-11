@@ -64,7 +64,9 @@ export function buildPaywallTiers(hostName: string): WelcomePaywallTier[] {
   // the current Play/Stripe catalog. Provider dashboards remain authoritative
   // for price; `priceLabel` is replaced with Google Play's localized value in
   // the native shell when available.
-  return IAP_PRODUCTS.map((product, index) => ({
+  // This sheet may be shown inside the Android Play build. Web-only card
+  // packages belong in the web recharge sheet, not in this Play checkout UI.
+  return IAP_PRODUCTS.filter((product) => !product.webOnly).map((product, index) => ({
     id: product.productId,
     headline: `${copy[index]!.headline} · ${product.coins.toLocaleString()} Coins`,
     sub: copy[index]!.sub,

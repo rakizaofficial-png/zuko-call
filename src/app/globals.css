@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  /* System fallbacks keep production builds independent of Google Fonts CDN. */
+  --font-syne: ui-rounded, "Avenir Next", "Trebuchet MS", system-ui, sans-serif;
+  --font-manrope: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --ink: #06040b;
   --ink-2: #100c16;
   --ink-3: #1a1424;
