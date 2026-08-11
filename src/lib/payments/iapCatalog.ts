@@ -116,7 +116,9 @@ export async function getLocalizedIapProducts(): Promise<IapProduct[]> {
     return IAP_PRODUCTS.filter((product) => !product.webOnly).map((product) => ({
       ...product,
       priceLabel: prices.get(product.productId) || product.priceLabel,
-      available: true,
+      // A product absent from Google Play ProductDetails is not purchasable.
+      // Keep the button disabled until its Play Console entry is active.
+      available: prices.has(product.productId),
     }));
   }
   if (nativeWindow.__ZUKO_ANDROID__) return IAP_PRODUCTS.filter((product) => !product.webOnly);
