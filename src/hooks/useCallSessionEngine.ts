@@ -314,7 +314,10 @@ export function useCallSessionEngine(opts: {
             "@/lib/walletApi"
           );
           const wallet = await fetchOrCreateWallet();
-          const need = Math.max(1, Math.floor(Number(host.ratePerMinute) || 80));
+          const need = Math.max(
+            1,
+            Math.floor(Number(host.chargePerMinute ?? host.ratePerMinute) || 80),
+          );
           if (wallet.coinBalance < need) {
             throw new Error("Insufficient balance, please recharge");
           }
@@ -493,7 +496,9 @@ export function useCallSessionEngine(opts: {
 
   const ratePerMinute =
     aiHost?.cost_per_minute ||
+    liveHost?.chargePerMinute ||
     liveHost?.ratePerMinute ||
+    bridgeCall?.chargePerMinute ||
     bridgeCall?.ratePerMinute ||
     80;
 

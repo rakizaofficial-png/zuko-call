@@ -255,8 +255,11 @@ export default function CallSessionClient({
     : effectiveRate(ratePerMinute, isPremium);
   /** Actual per-minute charge for live bridge (server) or AI (client rate) */
   const chargeRate =
-    !isAi && bridgeCall?.ratePerMinute
-      ? Math.max(1, Math.floor(bridgeCall.ratePerMinute))
+    !isAi && (bridgeCall?.chargePerMinute || bridgeCall?.ratePerMinute)
+      ? Math.max(
+          1,
+          Math.floor(bridgeCall.chargePerMinute || bridgeCall.ratePerMinute),
+        )
       : rate;
   const getBillingSnapshot = useEffectEvent(() => ({
     coins,

@@ -101,7 +101,7 @@ function enrichLive(h: LiveHost, i: number): DiscoverHost {
     flag: flags[country] || "🌍",
     language: LANG_BY_COUNTRY[country] || "English",
     rating: 4.5 + (seed % 50) / 100,
-    callRate: h.ratePerMinute || 80,
+    callRate: h.chargePerMinute || h.ratePerMinute || 80,
     followers: 800 + (seed % 22000),
     verified: true,
     online: Boolean(h.isOnline || h.isLive || h.isOnCall),

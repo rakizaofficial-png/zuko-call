@@ -33,6 +33,8 @@ export type BridgeCall = {
   userName: string;
   userAvatar?: string;
   ratePerMinute: number;
+  /** Authoritative server-calculated coin debit for one completed minute. */
+  chargePerMinute?: number;
   status: "ringing" | "accepted" | "rejected" | "ended" | "missed";
   hostUidAgora: number;
   userUidAgora: number;
