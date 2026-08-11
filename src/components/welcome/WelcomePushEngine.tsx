@@ -18,6 +18,10 @@ import { ensurePremiumFemalePool } from "@/lib/welcomePush/premiumFemaleGenerato
  */
 export function WelcomePushEngine() {
   const pathname = usePathname();
+  // Never let a simulated call or prerecorded teaser mask a real production
+  // call. Demo behavior is available only when deliberately enabled.
+  const simulatedCallsEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_SIMULATED_CALLS === "true";
   const onDashboard =
     pathname === "/" ||
     pathname === "" ||
@@ -29,7 +33,7 @@ export function WelcomePushEngine() {
   // Pause global auto-call while viewing a specific host profile
   // (profile has its own HostProfileAutoCall from that host)
   const onHostProfile = pathname.startsWith("/host/");
-  const enabled = onDashboard && !onHostProfile;
+  const enabled = simulatedCallsEnabled && onDashboard && !onHostProfile;
 
   useEffect(() => {
     if (!enabled) return;

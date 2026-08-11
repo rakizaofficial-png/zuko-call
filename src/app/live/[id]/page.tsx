@@ -679,9 +679,6 @@ export default function HostOnlyLiveRoomPage({
       // Soft hold: balance already checked. Coins charge on accept via billFirst.
       const call = await createCall({
         hostId,
-        userId,
-        userName,
-        userAvatar: avatarUrl || undefined,
       });
       if (callCancelledRef.current) {
         stopRingingTone();

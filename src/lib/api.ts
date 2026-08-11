@@ -76,9 +76,6 @@ export async function fetchHostProfile(
 
 export async function createCall(input: {
   hostId: string;
-  userId: string;
-  userName: string;
-  userAvatar?: string;
 }): Promise<BridgeCall> {
   const res = await fetch(`${requireApiBase()}/calls`, {
     method: "POST",

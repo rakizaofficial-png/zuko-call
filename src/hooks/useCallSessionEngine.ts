@@ -18,7 +18,7 @@ import {
   startUserAgoraCall,
   stopUserAgoraCall,
 } from "@/lib/agora";
-import { fakeHandshakeDelayMs, routeOneToOneCall } from "@/lib/aiHosts/routeCall";
+import { routeOneToOneCall } from "@/lib/aiHosts/routeCall";
 import type { AiHostRecord, CallEngineState, CallTransport } from "@/lib/aiHosts/types";
 import {
   endCallSession,
@@ -320,22 +320,16 @@ export function useCallSessionEngine(opts: {
           }
 
           setState("RINGING");
-          setStatusText("Connecting to Host…");
+          setStatusText("Requesting Host…");
           startRingingTone();
-          await sleep(fakeHandshakeDelayMs());
-          stopRingingTone();
-          if (cancelledRef.current) return;
-
           setStatusText(`Ringing ${host.name}…`);
           const { getLocalProfile } = await import("@/lib/userProfile");
           const profile = getLocalProfile();
           const userId = getDeviceUserId() || profile.userId;
           const call = await createCall({
             hostId: host.id,
-            userId,
-            userName: profile.displayName,
-            userAvatar: profile.avatarUrl,
           });
+          stopRingingTone();
           if (cancelledRef.current) return;
           callIdRef.current = call.id;
           sessionIdRef.current = call.id;
@@ -429,8 +423,8 @@ export function useCallSessionEngine(opts: {
         setState("RINGING");
         setStatusText("Connecting to Host…");
         startRingingTone();
-        // Fake network handshake 2–4s — never instant
-        await sleep(fakeHandshakeDelayMs());
+        // This branch is only for an explicitly selected AI catalog host.
+        await sleep(150);
         stopRingingTone();
         if (cancelledRef.current) return;
 
