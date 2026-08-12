@@ -28,14 +28,13 @@ import { DailyCheckInModal } from "@/components/engagement/DailyCheckInModal";
 import { LuckySpinModal } from "@/components/engagement/LuckySpinModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { purchaseCoins } from "@/lib/payments/iap";
-import type { IapProduct } from "@/lib/payments/iapCatalog";
+import { getLocalizedIapProducts, type IapProduct } from "@/lib/payments/iapCatalog";
 import {
   fetchUserCallHistory,
   type CallHistoryRow,
 } from "@/lib/callHistoryApi";
 import { listLivePrivateCallHistory } from "@/lib/livePrivateCall";
 import {
-  fetchCoinCatalog,
   fetchWalletHistory,
   getDeviceUserId,
   type WalletLedgerEntry,
@@ -165,7 +164,9 @@ export default function ProfilePage() {
     : "…";
 
   useEffect(() => {
-    void fetchCoinCatalog().then((list) => {
+    // Native Android receives the localized Google Play ProductDetails price;
+    // web receives Stripe's live price or the server-owned USD reference.
+    void getLocalizedIapProducts().then((list) => {
       setProducts(list as IapProduct[]);
       const popular =
         list.find((p) => p.popular)?.productId || list[0]?.productId || "";

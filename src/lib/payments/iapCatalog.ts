@@ -129,6 +129,8 @@ export async function getLocalizedIapProducts(): Promise<IapProduct[]> {
       products?: Array<{
         id: string; type: string; coins: number; bonusCoins: number;
         title: string; available: boolean; price?: string | null;
+        /** Informational server-side USD reference; never a checkout amount. */
+        referencePrice?: string | null;
       }>;
     };
     if (!response.ok || !Array.isArray(payload.products)) throw new Error("Web payment catalog unavailable");
@@ -148,7 +150,10 @@ export async function getLocalizedIapProducts(): Promise<IapProduct[]> {
           available: product.available,
           // This comes only from the provider-backed API once configured. A
           // browser never receives a Stripe Price ID or an authoritative amount.
-          priceLabel: product.price || (product.available ? "Card checkout" : "Card checkout unavailable"),
+          // Stripe's localized provider price wins once a Price is configured.
+          // Until then, show the server-owned package reference—not a client
+          // calculated amount—while keeping checkout disabled.
+          priceLabel: product.price || product.referencePrice || (product.available ? "Card checkout" : "Card checkout unavailable"),
           valueLabel: known?.valueLabel,
         };
       });
